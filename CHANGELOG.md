@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added `lipgloss` dependency for rich terminal UI formatting.
+- Defined initial UI styling tokens (`titleStyle`, `commandStyle`, etc.) in `cmd/sourcevault/main.go`.
+- Implemented `printUsage` function with accompanying GoDoc comments.
 - Added comprehensive GoDoc comments to `cmd/sourcevault/main.go` functions (`main` and `run`).
 - Created `internal/version/version.go` to track application metadata (`AppName`, `AppVersion`, `GitCommit`, `GitBranch`, `BuildDate`, `Architecture`).
 - Added standard `Makefile` with targets for build, install, uninstall, run, clean, and test. Injects version info via `LDFLAGS`.
