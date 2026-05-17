@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Embedded `WebConfig` and `SshConfig` within the main `Config` structure for hierarchical configuration management.
 - Created `internal/config/config.go` with `Config`, `WebConfig`, and `SshConfig` structures.
 - Added comprehensive GoDoc comments to all configuration structs in `internal/config`.
 - Integrated `internal/version` package into `cmd/sourcevault/main.go` to display application build metadata (version, git commit, build date, architecture) on startup.

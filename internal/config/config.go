@@ -27,9 +27,11 @@ package config
 
 // Config represents the global application configuration.
 type Config struct {
-	RootDir  string // The base directory for all sourcevault data and repositories
-	LogFile  string // The path to the application log file
-	LogLevel string // The minimum level of logs to emit (e.g. debug, info, warn, error)
+	RootDir  string    // The base directory for all sourcevault data and repositories
+	LogFile  string    // The path to the application log file
+	LogLevel string    // The minimum level of logs to emit (e.g. debug, info, warn, error)
+	Web      WebConfig // Configuration for the web server and UI
+	Ssh      SshConfig // Configuration for the Git SSH server
 }
 
 // WebConfig holds settings for the HTTP/HTTPS web interface and API.
