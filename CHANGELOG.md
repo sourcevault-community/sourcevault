@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Created `internal/version/version.go` to track application metadata (`AppName`, `AppVersion`, `GitCommit`, `GitBranch`, `BuildDate`, `Architecture`).
+- Added standard `Makefile` with targets for build, install, uninstall, run, clean, and test. Injects version info via `LDFLAGS`.
 - Added `.ai-rules.md` and `.cursorrules` to strictly enforce coding standards, changelog maintenance, commit hygiene, and pre-commit test execution for AI assistants.
 - Initialized base Go project structure and module (`sourcevault`).
 - Added initial `cmd/sourcevault/main.go` entrypoint with standard license `HEADER`.
