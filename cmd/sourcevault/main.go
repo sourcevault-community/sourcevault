@@ -25,8 +25,30 @@
 
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+)
 
+const banner = `
+===========================================================================
+ ####   ####  #    # #####   ####  ###### #    #   ##   #    # #      #####
+#      #    # #    # #    # #    # #      #    #  #  #  #    # #        #
+ ####  #    # #    # #    # #      #####  #    # #    # #    # #        #
+     # #    # #    # #####  #      #      #    # ###### #    # #        #
+#    # #    # #    # #   #  #    # #       #  #  #    # #    # #        #
+ ####   ####   ####  #    #  ####  ######   ##   #    #  ####  ######   #
+===========================================================================
+`
+
+// main is the primary entry point for the SourceVault application.
+// It delegates execution to the run function.
 func main() {
-	fmt.Println("Hello, World!")
+	run()
+}
+
+// run handles the core startup and execution logic,
+// such as displaying the banner and initializing the server.
+func run() {
+	fmt.Fprint(os.Stdout, banner)
 }
