@@ -30,6 +30,7 @@ import (
 	"os"
 	"strings"
 	"github.com/charmbracelet/lipgloss"
+	"sourcevault/internal/version"
 )
 
 const banner = `
@@ -102,6 +103,15 @@ func main() {
 // such as displaying the banner and initializing the server.
 func run() {
 	fmt.Fprint(os.Stdout, banner)
+
+	// Output application build information.
+	fmt.Printf("Application Information:\n")
+	fmt.Printf("- Name          :  %s\n", version.Current.AppName)
+	fmt.Printf("- Version       :  %s\n", version.Current.AppVersion)
+	fmt.Printf("- Git Branch    :  %s\n", version.Current.GitBranch)
+	fmt.Printf("- Git Commit    :  %s\n", version.Current.GitCommit)
+	fmt.Printf("- Build Date    :  %s\n", version.Current.BuildDate)
+	fmt.Printf("- Architecture  :  %s\n", version.Current.Architecture)
 }
 
 // printUsage displays the available commands and general usage instructions.
