@@ -81,6 +81,8 @@ type command struct {
 	description	string
 }
 
+// commands is the list of available CLI commands and their descriptions
+// that are displayed when a user requests help or provides invalid arguments.
 var commands = []command{
 	{"help", "Display this message"},
 	{"start", "Start service"},

@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Fully implemented `printUsage` in `cmd/sourcevault/main.go` using `lipgloss` styling and `strings.Builder` to output a formatted CLI help menu.
+- Defined the initial list of `commands` (`help`, `start`) for the CLI interface.
 - Added `lipgloss` dependency for rich terminal UI formatting.
 - Defined initial UI styling tokens (`titleStyle`, `commandStyle`, etc.) in `cmd/sourcevault/main.go`.
 - Implemented `printUsage` function with accompanying GoDoc comments.
