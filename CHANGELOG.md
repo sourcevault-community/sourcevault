@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Implemented environment variable configuration loading in `internal/config/config.go` using `godotenv` to parse `.env` files.
+- Added comprehensive inline documentation explaining the configuration loading and override flow.
 - Documented `SOURCEVAULT_SSH_ENABLED`, `SOURCEVAULT_SSH_HOST`, and `SOURCEVAULT_SSH_PORT` in `README.md` and `sourcevault.env.sample` to match new `SshConfig` structures.
 - Added inline GoDoc comments to `cmd/sourcevault/main.go` for the configuration output block.
 - Embedded `WebConfig` and `SshConfig` within the main `Config` structure for hierarchical configuration management.

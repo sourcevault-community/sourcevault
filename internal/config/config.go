@@ -25,6 +25,14 @@
 
 package config
 
+import (
+	"os"
+	"strings"
+	"strconv"
+
+	"github.com/joho/godotenv"
+)
+
 // Config represents the global application configuration.
 type Config struct {
 	RootDir  string    // The base directory for all sourcevault data and repositories
@@ -46,4 +54,90 @@ type SshConfig struct {
 	Enabled bool   // Whether the SSH server should be started
 	Host    string // The network interface/IP to bind the SSH server to
 	Port    int    // The port number for the SSH server (fixed unexported field typo)
+}
+
+// Load initializes a Config instance with default values and overrides
+// them with values from environment variables if present.
+func Load() (*Config, error) {
+	// Determine which environment file to load, defaulting to sourcevault.env
+	envFile := os.Getenv("SOURCEVAULT_CONFIG_FILE")
+	if envFile == "" {
+		envFile = "sourcevault.env"
+	}
+
+	// Attempt to load the environment variables from the file.
+	// We ignore errors here since the file is optional.
+	_ = godotenv.Load(envFile)
+
+	// Initialize with sensible defaults
+	c := &Config{
+		RootDir:  "/home/sourcevault",
+		LogFile:  "",
+		LogLevel: "ERROR",
+		Web: WebConfig{
+			Enabled: true,
+			Host:    "0.0.0.0",
+			Port:    8080,
+		},
+		Ssh: SshConfig{
+			Enabled: true,
+			Host:    "0.0.0.0",
+			Port:    2222,
+		},
+	}
+
+	// Override global settings from environment variables
+	if val := os.Getenv("SOURCEVAULT_ROOT_DIR"); val != "" {
+		c.RootDir = val
+	}
+	if val := os.Getenv("SOURCEVAULT_LOG_FILE"); val != "" {
+		c.LogFile = val
+	}
+	if val := os.Getenv("SOURCEVAULT_LOG_LEVEL"); val != "" {
+		c.LogLevel = normalizeLogLevel(val)
+	}
+
+	// Override Web server settings from environment variables
+	if val := os.Getenv("SOURCEVAULT_WEB_ENABLED"); val != "" {
+		c.Web.Enabled = strings.EqualFold(val, "true")
+	}
+	if val := os.Getenv("SOURCEVAULT_WEB_HOST"); val != "" {
+		c.Web.Host = val
+	}
+	if val := os.Getenv("SOURCEVAULT_WEB_PORT"); val != "" {
+		if p, err := strconv.Atoi(val); err == nil {
+			c.Web.Port = p
+		}
+	}
+
+	// Override SSH server settings from environment variables
+	if val := os.Getenv("SOURCEVAULT_SSH_ENABLED"); val != "" {
+		c.Ssh.Enabled = strings.EqualFold(val, "true")
+	}
+	if val := os.Getenv("SOURCEVAULT_SSH_HOST"); val != "" {
+		c.Ssh.Host = val
+	}
+	if val := os.Getenv("SOURCEVAULT_SSH_PORT"); val != "" {
+		if p, err := strconv.Atoi(val); err == nil {
+			c.Ssh.Port = p
+		}
+	}
+	return c, nil
+}
+
+// normalizeLogLevel converts a raw log level string into a standardized
+// uppercase representation supported by the system.
+func normalizeLogLevel(level string) string {
+	switch strings.ToUpper(strings.TrimSpace(level)) {
+	case "ERROR":
+		return "ERROR"
+	case "WARN", "WARNING":
+		return "WARN"
+	case "DEBUG":
+		return "DEBUG"
+	case "INFO":
+		return "INFO"
+	default:
+		return "INFO"
+	}
 }
