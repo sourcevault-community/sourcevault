@@ -53,7 +53,7 @@ To trigger work, you can prompt: **"Implement task [ID] from the TODO list."**
 - `internal/crypto` (new)
 **Acceptance Criteria**:
 1. Create a `sourcevault ca` subcommand with nested commands: `create`, `rotate`, `revoke`, `unseal`, and `seal`.
-2. Implement Ed25519 key generation for SSH Certificate Authorities.
+2. Implement key generation for SSH Certificate Authorities, supporting **both** Ed25519 (default) and RSA-4096 (with SHA-256/SHA-512 signatures) to ensure full FIPS compliance.
 3. Save public/private keypairs securely within the `RootDir`, encrypted with a passphrase using `ssh.MarshalPrivateKeyWithPassphrase`.
 4. Implement an "Unseal" mechanism (similar to HashiCorp Vault) where the decrypted `ssh.Signer` is temporarily held in a thread-safe memory structure (`sync.RWMutex`), allowing users to self-sign keys without providing the CA password repeatedly.
 5. Provide an RPC or internal API to interface with the in-memory signer.
