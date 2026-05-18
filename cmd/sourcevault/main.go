@@ -98,7 +98,7 @@ var commands = []command{
 func main() {
 	// Simple argument check: the user must provide at least one command.
 	if len(os.Args) < 2 {
-		printUsage()
+		printUsage(os.Stdout)
 		return
 	}
 
@@ -113,7 +113,8 @@ func main() {
 // run orchestrates the application's bootstrap process.
 func run(args []string, stdout, stderr io.Writer) error {
 	// Print the ASCII banner to the provided stdout writer.
-	fmt.Fprint(os.Stdout, banner)
+	fmt.Fprint(stdout, banner)
+	fmt.Fprint(stdout, "\n\n")
 
 	// Step 1: Load application configuration.
 	// Configuration is sourced from environment variables and optional .env files.
@@ -164,13 +165,13 @@ func run(args []string, stdout, stderr io.Writer) error {
 
 // printUsage displays the available commands and general usage instructions.
 // It leverages lipgloss styles for rich terminal output formatting.
-func printUsage() {
+func printUsage(out io.Writer) {
 	// Print the basic usage pattern
-	fmt.Println(subheadingStyle.Render("Usage:"))
-	fmt.Println(listStyle.Render("sourcevault <command> [arguments]"))
+	fmt.Fprintln(out, subheadingStyle.Render("Usage:"))
+	fmt.Fprintln(out, listStyle.Render("sourcevault <command> [arguments]"))
 
 	// Print the list of available commands with their descriptions
-	fmt.Println(subheadingStyle.Render("Available Commands:"))
+	fmt.Fprintln(out, subheadingStyle.Render("Available Commands:"))
 
 	var sb strings.Builder
 	for _, cmd := range commands {
@@ -179,5 +180,5 @@ func printUsage() {
 		sb.WriteString(descStyle.Render(cmd.description))
 		sb.WriteString("\n")
 	}
-	fmt.Println(listStyle.Render(sb.String()))
+	fmt.Fprintln(out, listStyle.Render(sb.String()))
 }

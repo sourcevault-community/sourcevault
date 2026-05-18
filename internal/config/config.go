@@ -179,3 +179,11 @@ func normalizeLogLevel(level string) string {
 		return "INFO"
 	}
 }
+
+func (c *Config) LogLevelValue() string {
+	if c.LogLevel != "" {
+		return normalizeLogLevel(c.LogLevel)
+	}
+
+	return "INFO"
+}
