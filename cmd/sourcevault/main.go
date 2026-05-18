@@ -130,11 +130,11 @@ func run(args []string, stdout, stderr io.Writer) error {
 
 	// Step 3: Log application metadata.
 	// This helps in identifying the exact build running in a given environment.
-	slog.Info("Application is starting up", "name", version.Current.AppName, "version", version.Current.AppVersion)
+	slog.Info("Application is starting up", "application_name", version.Current.AppName, "application_version", version.Current.AppVersion)
 
 	slog.Info("Application information",
-		"name", version.Current.AppName,
-		"version", version.Current.AppVersion,
+		"application_name", version.Current.AppName,
+		"application_version", version.Current.AppVersion,
 		"git_branch", version.Current.GitBranch,
 		"git_commit", version.Current.GitCommit,
 		"build_date", version.Current.BuildDate,

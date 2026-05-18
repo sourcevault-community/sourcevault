@@ -32,6 +32,7 @@ import (
 	"sourcevault/internal/config"
 )
 
+// TestParseLogLevel verifies the mapping of string log levels to slog.Level constants.
 func TestParseLogLevel(t *testing.T) {
 	tests := []struct {
 		input    string
@@ -54,6 +55,8 @@ func TestParseLogLevel(t *testing.T) {
 	}
 }
 
+// TestInit ensures that the logger initialization process completes
+// without error and returns a valid cleanup function.
 func TestInit(t *testing.T) {
 	cfg := &config.Config{
 		LogLevel: "DEBUG",

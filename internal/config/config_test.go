@@ -31,6 +31,8 @@ import (
 	"testing"
 )
 
+// TestLoad_Defaults verifies that the configuration loader applies
+// the correct default values when no environment variables are set.
 func TestLoad_Defaults(t *testing.T) {
 	// Clear relevant environment variables to ensure defaults are used
 	os.Unsetenv("SOURCEVAULT_ROOT_DIR")
@@ -65,6 +67,8 @@ func TestLoad_Defaults(t *testing.T) {
 	}
 }
 
+// TestLoad_EnvOverrides ensures that environment variables correctly
+// override the default configuration settings.
 func TestLoad_EnvOverrides(t *testing.T) {
 	os.Setenv("SOURCEVAULT_ROOT_DIR", "/tmp/sourcevault")
 	os.Setenv("SOURCEVAULT_LOG_LEVEL", "DEBUG")
@@ -94,6 +98,8 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	}
 }
 
+// TestNormalizeLogLevel verifies the normalization logic for various
+// log level string inputs.
 func TestNormalizeLogLevel(t *testing.T) {
 	tests := []struct {
 		input    string
@@ -118,6 +124,8 @@ func TestNormalizeLogLevel(t *testing.T) {
 	}
 }
 
+// TestLogLevelValue checks that LogLevelValue correctly returns a
+// standardized log level or a sensible default.
 func TestLogLevelValue(t *testing.T) {
 	cfg := &Config{LogLevel: "debug"}
 	if cfg.LogLevelValue() != "DEBUG" {
@@ -130,6 +138,8 @@ func TestLogLevelValue(t *testing.T) {
 	}
 }
 
+// TestSanitize verifies that configuration paths are correctly converted
+// to absolute paths during the sanitization phase.
 func TestSanitize(t *testing.T) {
 	cfg := &Config{
 		RootDir: "test-data",

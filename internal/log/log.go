@@ -34,6 +34,11 @@ import (
 	"sourcevault/internal/config"
 )
 
+// Init initializes the global slog logger based on the provided configuration.
+// It sets up either a file-based logger or a standard error logger,
+// configures the log level, and adds source information to the logs
+// with an optimized path-trimming strategy.
+// It returns a cleanup function that should be called to close any open log files.
 func Init(cfg *config.Config) func() {
 	var out *os.File
 	var err error
@@ -61,7 +66,7 @@ func Init(cfg *config.Config) func() {
 				source, ok := a.Value.Any().(*slog.Source)
 				if ok {
 					// Logic: Look for "sourcevault/" and trim everything before it.
-					// If not found, fall back to the last two elements of the path.
+					// This ensures logs are concise and independent of the build environment's path.
 					fullPath := source.File
 					needle := "sourcevault/"
 					if idx := strings.Index(fullPath, needle); idx != -1 {
@@ -82,6 +87,7 @@ func Init(cfg *config.Config) func() {
 	handler := slog.NewTextHandler(out, opts)
 	slog.SetDefault(slog.New(handler))
 
+	// Return a closure to handle safe cleanup of the output stream.
 	return func() {
 		if out != os.Stderr {
 			out.Close()
@@ -89,6 +95,8 @@ func Init(cfg *config.Config) func() {
 	}
 }
 
+// parseLogLevel converts a string representation of a log level into
+// a slog.Level. It defaults to slog.LevelInfo if the input is unrecognized.
 func parseLogLevel(value string) slog.Level {
 	switch strings.ToUpper(strings.TrimSpace(value)) {
 	case "DEBUG":

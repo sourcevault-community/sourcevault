@@ -30,6 +30,8 @@ import (
 	"testing"
 )
 
+// TestRun verifies that the core application bootstrap process (run function)
+// executes successfully and produces the expected output to stdout.
 func TestRun(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
@@ -45,6 +47,8 @@ func TestRun(t *testing.T) {
 	}
 }
 
+// TestPrintUsage ensures that the help menu is correctly formatted
+// and written to the provided output writer.
 func TestPrintUsage(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	printUsage(stdout)

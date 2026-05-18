@@ -30,6 +30,8 @@ import (
 	"testing"
 )
 
+// TestCurrentVersion verifies that the application version metadata is correctly
+// initialized with expected default values.
 func TestCurrentVersion(t *testing.T) {
 	if Current.AppName != "sourcevault" {
 		t.Errorf("expected AppName sourcevault, got %s", Current.AppName)
