@@ -36,8 +36,6 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 
-	"sourcevault/internal/config"
-	sv_log "sourcevault/internal/log"
 	"sourcevault/internal/version"
 	sv_web "sourcevault/internal/web"
 )
@@ -50,15 +48,7 @@ var startCmd = &cobra.Command{
 		fmt.Fprint(cmd.OutOrStdout(), banner)
 		fmt.Fprint(cmd.OutOrStdout(), "\n\n")
 
-		// Step 1: Load application configuration.
-		cfg, err := config.Load()
-		if err != nil {
-			return fmt.Errorf("loading configuration: %w", err)
-		}
-
-		// Step 2: Initialize the logging system.
-		closeLog := sv_log.Init(cfg)
-		defer closeLog()
+		cfg := appCfg
 
 		// Step 3: Log application metadata.
 		slog.Info("Application is starting up", "application_name", version.Current.AppName, "application_version", version.Current.AppVersion)

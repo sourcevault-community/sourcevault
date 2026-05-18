@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Refactored `cmd/sourcevault` to load configuration and initialize logging via `rootCmd.PersistentPreRunE` so all future subcommands inherit this setup automatically.
 - Migrated CLI command routing and help generation to `github.com/spf13/cobra`.
 - Restructured `cmd/sourcevault/main.go` into `main.go`, `root.go`, and `start.go` for cleaner separation of concerns.
 - Adapted custom `lipgloss` styling into Cobra's `SetHelpFunc` template for consistent visual branding.

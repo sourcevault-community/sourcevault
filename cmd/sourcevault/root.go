@@ -31,6 +31,9 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
+
+	"sourcevault/internal/config"
+	sv_log "sourcevault/internal/log"
 )
 
 // banner is the ASCII art visual identity displayed when the application starts.
@@ -63,10 +66,35 @@ var (
 			MarginBottom(1)
 )
 
+var (
+	appCfg   *config.Config
+	closeLog func()
+)
+
 var rootCmd = &cobra.Command{
 	Use:   "sourcevault",
 	Short: "SourceVault: The Federated Code Collaboration Platform",
 	Long:  banner + "\nSourceVault is an open-source decentralized Git hosting platform.",
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		// Do not initialize heavy resources if just calling help
+		if cmd.Name() == "help" {
+			return nil
+		}
+
+		cfg, err := config.Load()
+		if err != nil {
+			return fmt.Errorf("loading configuration: %w", err)
+		}
+		appCfg = cfg
+		closeLog = sv_log.Init(cfg)
+
+		return nil
+	},
+	PersistentPostRun: func(cmd *cobra.Command, args []string) {
+		if closeLog != nil {
+			closeLog()
+		}
+	},
 }
 
 func init() {
