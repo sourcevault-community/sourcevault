@@ -27,15 +27,12 @@ package web
 
 import (
 	"context"
-	"crypto/subtle"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"sourcevault"
 	"sourcevault/internal/config"
 	"time"
-
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // responseWriter is a minimal wrapper around http.ResponseWriter that captures
@@ -51,27 +48,6 @@ type responseWriter struct {
 func (rw *responseWriter) WriteHeader(code int) {
 	rw.statusCode = code
 	rw.ResponseWriter.WriteHeader(code)
-}
-
-// basicAuthMiddleware wraps a handler with HTTP Basic Authentication.
-func basicAuthMiddleware(username, password string, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// If credentials are not configured, reject all requests securely.
-		if username == "" || password == "" {
-			http.Error(w, "Metrics authentication not configured", http.StatusUnauthorized)
-			return
-		}
-
-		user, pass, ok := r.BasicAuth()
-		// Use subtle.ConstantTimeCompare to prevent timing attacks.
-		if !ok || subtle.ConstantTimeCompare([]byte(user), []byte(username)) != 1 || subtle.ConstantTimeCompare([]byte(pass), []byte(password)) != 1 {
-			w.Header().Set("WWW-Authenticate", `Basic realm="Restricted"`)
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
 }
 
 // loggingMiddleware provides structured logging for every HTTP request.
@@ -153,10 +129,6 @@ func Handler(cfg *config.Config) http.Handler {
 		name := r.PathValue("name")
 		fmt.Fprintf(w, "Hello, %s!\n", name)
 	})
-
-	// Mount the Prometheus metrics endpoint behind Basic Authentication.
-	metricsHandler := basicAuthMiddleware(cfg.Web.Metrics.Username, cfg.Web.Metrics.Password, promhttp.Handler())
-	mux.Handle("GET /metrics", metricsHandler)
 
 	// Wrap the entire mux with the logging middleware.
 	return loggingMiddleware(mux)

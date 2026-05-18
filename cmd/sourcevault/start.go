@@ -93,6 +93,14 @@ var startCmd = &cobra.Command{
 		// Keep track of how many services were successfully started.
 		var started int
 
+		// Launch the dedicated metrics server if enabled.
+		if cfg.Metrics.Enabled {
+			started++
+			g.Go(func() error {
+				return metrics.RunServer(ctx, cfg)
+			})
+		}
+
 		// Launch the Web server if enabled.
 		if cfg.Web.Enabled {
 			started++

@@ -29,9 +29,14 @@ import (
 	"context"
 	"log/slog"
 	"time"
+	"net/http"
+	"fmt"
+	
+	"sourcevault/internal/config"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/shirou/gopsutil/v4/cpu"
 	"github.com/shirou/gopsutil/v4/disk"
 	"github.com/shirou/gopsutil/v4/mem"
@@ -72,6 +77,31 @@ func StartCollector(ctx context.Context, rootDir string) {
 			}
 		}
 	}()
+}
+
+// RunServer starts a dedicated HTTP server for Prometheus metrics.
+func RunServer(ctx context.Context, cfg *config.Config) error {
+	slog.Info("Starting dedicated metrics server", "host", cfg.Metrics.Host, "port", cfg.Metrics.Port)
+	
+	mux := http.NewServeMux()
+	mux.Handle("GET /metrics", promhttp.Handler())
+
+	srv := &http.Server{
+		Addr:    fmt.Sprintf("%s:%d", cfg.Metrics.Host, cfg.Metrics.Port),
+		Handler: mux,
+	}
+
+	go func() {
+		<-ctx.Done()
+		slog.Info("Shutting down metrics server")
+		srv.Shutdown(context.Background())
+	}()
+
+	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+		return fmt.Errorf("metrics server error: %w", err)
+	}
+
+	return nil
 }
 
 func updateMetrics(rootDir string) {

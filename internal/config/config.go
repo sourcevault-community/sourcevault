@@ -41,23 +41,24 @@ type Config struct {
 	RootDir  string    // RootDir is the base directory for all sourcevault data and repositories.
 	LogFile  string    // LogFile is the path to the application log file, relative to RootDir if not absolute.
 	LogLevel string    // LogLevel specifies the minimum level of logs to emit (e.g., DEBUG, INFO, WARN, ERROR).
-	Web      WebConfig // Web contains configuration for the administrative web server and UI.
-	Ssh      SshConfig // Ssh contains configuration for the built-in Git SSH server.
+	Web      WebConfig     // Web contains configuration for the administrative web server and UI.
+	Ssh      SshConfig     // Ssh contains configuration for the built-in Git SSH server.
+	Metrics  MetricsConfig // Metrics contains configuration for the dedicated Prometheus metrics server.
 }
 
 // WebConfig holds settings for the HTTP/HTTPS web interface and API.
 // This interface allows for repository management and system administration.
 type WebConfig struct {
-	Enabled bool          // Enabled determines whether the web server should be started upon application launch.
-	Host    string        // Host is the network interface or IP address to bind the web server to.
-	Port    int           // Port is the port number the web server will listen on.
-	Metrics MetricsConfig // Metrics contains authentication settings for the /metrics endpoint.
+	Enabled bool   // Enabled determines whether the web server should be started upon application launch.
+	Host    string // Host is the network interface or IP address to bind the web server to.
+	Port    int    // Port is the port number the web server will listen on.
 }
 
-// MetricsConfig holds authentication settings for the Prometheus /metrics endpoint.
+// MetricsConfig holds settings for the dedicated network-isolated metrics server.
 type MetricsConfig struct {
-	Username string
-	Password string
+	Enabled bool   // Enabled determines whether the metrics server should run.
+	Host    string // Host is the network interface to bind to (usually 127.0.0.1 for security).
+	Port    int    // Port is the port number the metrics server will listen on (default 9090).
 }
 
 // SshConfig holds settings for the built-in SSH server used for Git operations.
@@ -100,6 +101,11 @@ func Load() (*Config, error) {
 			Host:    "0.0.0.0",
 			Port:    2222,
 		},
+		Metrics: MetricsConfig{
+			Enabled: true,
+			Host:    "127.0.0.1",
+			Port:    9090,
+		},
 	}
 
 	// Override global settings from environment variables if they are defined.
@@ -126,11 +132,18 @@ func Load() (*Config, error) {
 			c.Web.Port = p
 		}
 	}
-	if val := os.Getenv("SOURCEVAULT_METRICS_USERNAME"); val != "" {
-		c.Web.Metrics.Username = val
+	
+	// Override Metrics server settings from environment variables if they are defined.
+	if val := os.Getenv("SOURCEVAULT_METRICS_ENABLED"); val != "" {
+		c.Metrics.Enabled = strings.EqualFold(val, "true")
 	}
-	if val := os.Getenv("SOURCEVAULT_METRICS_PASSWORD"); val != "" {
-		c.Web.Metrics.Password = val
+	if val := os.Getenv("SOURCEVAULT_METRICS_HOST"); val != "" {
+		c.Metrics.Host = val
+	}
+	if val := os.Getenv("SOURCEVAULT_METRICS_PORT"); val != "" {
+		if p, err := strconv.Atoi(val); err == nil {
+			c.Metrics.Port = p
+		}
 	}
 
 	// Override SSH server settings from environment variables if they are defined.
