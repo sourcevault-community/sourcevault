@@ -27,12 +27,15 @@ package web
 
 import (
 	"context"
+	"crypto/subtle"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"sourcevault"
 	"sourcevault/internal/config"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // responseWriter is a minimal wrapper around http.ResponseWriter that captures
@@ -48,6 +51,27 @@ type responseWriter struct {
 func (rw *responseWriter) WriteHeader(code int) {
 	rw.statusCode = code
 	rw.ResponseWriter.WriteHeader(code)
+}
+
+// basicAuthMiddleware wraps a handler with HTTP Basic Authentication.
+func basicAuthMiddleware(username, password string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// If credentials are not configured, reject all requests securely.
+		if username == "" || password == "" {
+			http.Error(w, "Metrics authentication not configured", http.StatusUnauthorized)
+			return
+		}
+
+		user, pass, ok := r.BasicAuth()
+		// Use subtle.ConstantTimeCompare to prevent timing attacks.
+		if !ok || subtle.ConstantTimeCompare([]byte(user), []byte(username)) != 1 || subtle.ConstantTimeCompare([]byte(pass), []byte(password)) != 1 {
+			w.Header().Set("WWW-Authenticate", `Basic realm="Restricted"`)
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
 
 // loggingMiddleware provides structured logging for every HTTP request.
@@ -79,7 +103,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func Handler() http.Handler {
+func Handler(cfg *config.Config) http.Handler {
 	mux := http.NewServeMux()
 
 	// Root handler serves the modern Coming Soon template.
@@ -130,6 +154,10 @@ func Handler() http.Handler {
 		fmt.Fprintf(w, "Hello, %s!\n", name)
 	})
 
+	// Mount the Prometheus metrics endpoint behind Basic Authentication.
+	metricsHandler := basicAuthMiddleware(cfg.Web.Metrics.Username, cfg.Web.Metrics.Password, promhttp.Handler())
+	mux.Handle("GET /metrics", metricsHandler)
+
 	// Wrap the entire mux with the logging middleware.
 	return loggingMiddleware(mux)
 }
@@ -139,7 +167,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 
 	srv := &http.Server{
 		Addr:    fmt.Sprintf("%s:%d", cfg.Web.Host, cfg.Web.Port),
-		Handler: Handler(),
+		Handler: Handler(cfg),
 	}
 
 	// Monitor the context for cancellation and trigger server shutdown.

@@ -23,105 +23,79 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.                                                                //
 // ===================================================================================================================================== //
 
-package main
+package metrics
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
-	"os"
-	"os/signal"
-	"syscall"
+	"time"
 
-	"github.com/spf13/cobra"
-	"golang.org/x/sync/errgroup"
-
-	"sourcevault/internal/metrics"
-	"sourcevault/internal/version"
-	sv_web "sourcevault/internal/web"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/shirou/gopsutil/v4/disk"
+	"github.com/shirou/gopsutil/v4/mem"
 )
 
-var startCmd = &cobra.Command{
-	Use:   "start",
-	Short: "Start service",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		// Print the ASCII banner to stdout.
-		fmt.Fprint(cmd.OutOrStdout(), banner)
-		fmt.Fprint(cmd.OutOrStdout(), "\n\n")
+var (
+	cpuUsage = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "sourcevault_system_cpu_percent",
+		Help: "Current CPU utilization of the system as a percentage",
+	})
 
-		cfg := appCfg
+	memUsage = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "sourcevault_system_memory_used_bytes",
+		Help: "Current memory used by the system in bytes",
+	})
 
-		// Step 3: Log application metadata.
-		slog.Info("Application is starting up", "application_name", version.Current.AppName, "application_version", version.Current.AppVersion)
+	diskFree = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "sourcevault_system_disk_free_bytes",
+		Help: "Current free disk space on the primary volume in bytes",
+	})
+)
 
-		slog.Info("Application information",
-			"application_name", version.Current.AppName,
-			"application_version", version.Current.AppVersion,
-			"git_branch", version.Current.GitBranch,
-			"git_commit", version.Current.GitCommit,
-			"build_date", version.Current.BuildDate,
-			"architecture", version.Current.Architecture,
-		)
+// StartCollector launches a background goroutine that periodically polls system
+// metrics and updates the Prometheus gauges. It respects context cancellation.
+func StartCollector(ctx context.Context, rootDir string) {
+	ticker := time.NewTicker(15 * time.Second)
 
-		// Step 4: Log the parsed configuration at DEBUG level.
-		slog.Debug("Base configuration",
-			"root_dir", cfg.RootDir,
-			"log_file", cfg.LogFile,
-			"log_level", cfg.LogLevel,
-		)
-		slog.Debug("Web server configuration",
-			"enabled", cfg.Web.Enabled,
-			"host", cfg.Web.Host,
-			"port", cfg.Web.Port,
-		)
-		slog.Debug("SSH server configuration",
-			"enabled", cfg.Ssh.Enabled,
-			"host", cfg.Ssh.Host,
-			"port", cfg.Ssh.Port,
-		)
-
-		// Set up signal handling for graceful shutdown.
-		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-		defer stop()
-
-		// Use an errgroup to manage background services.
-		g, ctx := errgroup.WithContext(ctx)
-
-		// Start the Prometheus metrics collector in the background.
-		metrics.StartCollector(ctx, cfg.RootDir)
-
-		// Keep track of how many services were successfully started.
-		var started int
-
-		// Launch the Web server if enabled.
-		if cfg.Web.Enabled {
-			started++
-			g.Go(func() error {
-				return sv_web.Run(ctx, cfg)
-			})
-		}
-		// Launch the SSH server if enabled.
-		if cfg.Ssh.Enabled {
-			// started++
-			// g.Go(func() error { ... })
-		}
-
-		// If no services were enabled to start, wait for an interrupt signal
-		if started == 0 {
-			slog.Warn("No services (Web/SSH) are enabled; waiting for interrupt signal")
-			<-ctx.Done()
-		} else {
-			// Wait for all background services to complete or for a termination signal.
-			if err := g.Wait(); err != nil {
-				return fmt.Errorf("application error: %w", err)
+	go func() {
+		defer ticker.Stop()
+		slog.Info("Started background system metrics collector")
+		for {
+			select {
+			case <-ctx.Done():
+				slog.Info("Stopping background system metrics collector")
+				return
+			case <-ticker.C:
+				updateMetrics(rootDir)
 			}
 		}
-
-		slog.Info("Application shut down gracefully")
-		return nil
-	},
+	}()
 }
 
-func init() {
-	rootCmd.AddCommand(startCmd)
+func updateMetrics(rootDir string) {
+	// CPU usage (overall system usage)
+	percents, err := cpu.Percent(0, false)
+	if err == nil && len(percents) > 0 {
+		cpuUsage.Set(percents[0])
+	} else if err != nil {
+		slog.Debug("Failed to collect CPU metrics", "error", err)
+	}
+
+	// Memory usage
+	v, err := mem.VirtualMemory()
+	if err == nil {
+		memUsage.Set(float64(v.Used))
+	} else {
+		slog.Debug("Failed to collect memory metrics", "error", err)
+	}
+
+	// Disk free space based on the application's root directory
+	d, err := disk.Usage(rootDir)
+	if err == nil {
+		diskFree.Set(float64(d.Free))
+	} else {
+		slog.Debug("Failed to collect disk metrics", "error", err)
+	}
 }

@@ -48,9 +48,16 @@ type Config struct {
 // WebConfig holds settings for the HTTP/HTTPS web interface and API.
 // This interface allows for repository management and system administration.
 type WebConfig struct {
-	Enabled bool   // Enabled determines whether the web server should be started upon application launch.
-	Host    string // Host is the network interface or IP address to bind the web server to.
-	Port    int    // Port is the port number the web server will listen on.
+	Enabled bool          // Enabled determines whether the web server should be started upon application launch.
+	Host    string        // Host is the network interface or IP address to bind the web server to.
+	Port    int           // Port is the port number the web server will listen on.
+	Metrics MetricsConfig // Metrics contains authentication settings for the /metrics endpoint.
+}
+
+// MetricsConfig holds authentication settings for the Prometheus /metrics endpoint.
+type MetricsConfig struct {
+	Username string
+	Password string
 }
 
 // SshConfig holds settings for the built-in SSH server used for Git operations.
@@ -118,6 +125,12 @@ func Load() (*Config, error) {
 		if p, err := strconv.Atoi(val); err == nil {
 			c.Web.Port = p
 		}
+	}
+	if val := os.Getenv("SOURCEVAULT_METRICS_USERNAME"); val != "" {
+		c.Web.Metrics.Username = val
+	}
+	if val := os.Getenv("SOURCEVAULT_METRICS_PASSWORD"); val != "" {
+		c.Web.Metrics.Password = val
 	}
 
 	// Override SSH server settings from environment variables if they are defined.
