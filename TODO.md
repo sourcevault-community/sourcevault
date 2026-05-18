@@ -1,14 +1,45 @@
-# SourceVault TODOs
+# SourceVault Agentic TODOs
 
-This file tracks planned features, refactoring goals, and technical debt.
+This file is structured to be easily parsed and executed by an AI assistant.
+To trigger work, you can prompt: **"Implement task [ID] from the TODO list."**
 
-## Features
-- [ ] **Auto-Update Mechanism**: Implement a self-update feature using `go-selfupdate`.
-  - Add an `AutoUpdate` toggle to `config.go`.
-  - Create a background goroutine to poll for new GitHub releases.
-  - Expose a manual `sourcevault update` command via the Cobra CLI.
-  - Implement graceful restart instructions/logic upon successful binary replacement.
+---
 
-## Internal Systems
-- [ ] **SSH Server**: Implement the internal SSH server to handle Git clone/push/pull requests over port 2222.
-- [ ] **Database Setup**: Implement the SQLite repository logic (`internal/db` package with multiple domain files like `users.go`, `repositories.go`, etc.).
+### [SV-001] Implement Auto-Update Mechanism
+**Status**: `[ ]` Pending
+**Context / Files**:
+- `internal/config/config.go`
+- `cmd/sourcevault/start.go`
+- New package: `internal/updater`
+**Acceptance Criteria**:
+1. Implement a `go-selfupdate` wrapper in `internal/updater` to poll for new GitHub releases.
+2. Add an `AutoUpdate` toggle flag to `config.go` and `sourcevault.env.sample`.
+3. If enabled, start a background goroutine in `start.go` to check for updates daily.
+4. Expose a `sourcevault update` cobra command for manual execution.
+5. Provide logging and graceful restart instructions upon binary replacement.
+
+---
+
+### [SV-002] Implement Internal SSH Server Skeleton
+**Status**: `[ ]` Pending
+**Context / Files**:
+- `internal/config/config.go` (SshConfig)
+- `cmd/sourcevault/start.go`
+- New package: `internal/ssh`
+**Acceptance Criteria**:
+1. Create a basic SSH server using `golang.org/x/crypto/ssh` or `github.com/gliderlabs/ssh`.
+2. Bind the server to the Host and Port specified in `cfg.Ssh`.
+3. Wire the server into the `errgroup` in `start.go` so it starts alongside the Web and Metrics servers.
+4. Ensure it respects `ctx.Done()` for graceful shutdown.
+
+---
+
+### [SV-003] Implement SQLite Database Core
+**Status**: `[ ]` Pending
+**Context / Files**:
+- New package: `internal/db`
+**Acceptance Criteria**:
+1. Create `internal/db/db.go` containing the connection pool setup and schema migrations.
+2. Ensure the SQLite file is created inside the application's `RootDir`.
+3. Break domain logic into separate files (e.g., `users.go`, `repositories.go`) rather than a monolithic file.
+4. Implement basic CRUD interfaces for users and organizations.
