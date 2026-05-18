@@ -30,9 +30,13 @@ import (
 	"os"
 	"io"
 	"strings"
+	"log/slog"
+
 	"github.com/charmbracelet/lipgloss"
+
 	"sourcevault/internal/version"
 	"sourcevault/internal/config"
+	svlog "sourcevault/internal/log"
 )
 
 const banner = `
@@ -126,7 +130,20 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("loading configuration: %s", err)
 	}
 
+	// Initialize the logger based on configuration
+	closeLog := svlog.Init(cfg)
+	defer closeLog()
+
+	slog.Info("Application is starting up", "name", version.Current.AppName, "version", version.Current.AppVersion)
+
+
 	// Output application build information to help with troubleshooting and support.
+	slog.Info("Application information",
+		"name", version.Current.AppName,
+		"version", version.Current.AppVersion,
+		"git_branch", version.Current.GitBranch,
+		"git_commit", version.Current.GitCommit,
+	)
 	fmt.Printf("Application Information:\n")
 	fmt.Printf("- Name          :  %s\n", version.Current.AppName)
 	fmt.Printf("- Version       :  %s\n", version.Current.AppVersion)
