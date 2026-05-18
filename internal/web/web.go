@@ -106,6 +106,18 @@ func Handler() http.Handler {
 		w.Write(content)
 	})
 
+	// Serve the embedded favicon.
+	mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+		content, err := sourcevault.Templates.ReadFile("templates/favicon.ico")
+		if err != nil {
+			slog.Error("failed to read favicon", "error", err)
+			http.Error(w, "Favicon not found", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "image/x-icon")
+		w.Write(content)
+	})
+
 	// Status endpoint for health checks.
 	mux.HandleFunc("GET /status", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "Status: OK")
