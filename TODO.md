@@ -35,7 +35,7 @@ To trigger work, you can prompt: **"Implement task [ID] from the TODO list."**
 ---
 
 ### [SV-003] Implement Database Abstraction Core & Migrations
-**Status**: `[ ]` Pending
+**Status**: `[x]` Completed
 **Context / Files**:
 - `internal/config/config.go`
 - `sourcevault.env.sample`
