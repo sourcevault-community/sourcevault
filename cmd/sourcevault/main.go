@@ -28,15 +28,20 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 	"io"
 	"strings"
+	"context"
 	"log/slog"
 
 	"github.com/charmbracelet/lipgloss"
+	"golang.org/x/sync/errgroup"
 
 	"sourcevault/internal/version"
 	"sourcevault/internal/config"
 	sv_log "sourcevault/internal/log"
+	sv_web "sourcevault/internal/web"
 )
 
 // banner is the ASCII art visual identity displayed when the application starts.
@@ -115,16 +120,10 @@ func run(args []string, stdout, stderr io.Writer) error {
 	// The first argument after the binary name is the command.
 	cmd := args[1]
 
-	switch cmd {
-	case "help":
+	// Handle the 'help' command early to avoid unnecessary setup.
+	if cmd == "help" {
 		printUsage(stdout)
 		return nil
-	case "start":
-		// Proceed with the bootstrap process for the 'start' command.
-		break
-	default:
-		printUsage(stderr)
-		return fmt.Errorf("unknown command: %s", cmd)
 	}
 
 	// Print the ASCII banner to the provided stdout writer.
@@ -174,7 +173,33 @@ func run(args []string, stdout, stderr io.Writer) error {
 		"port", cfg.Ssh.Port,
 	)
 
-	// TODO: Step 5: Initialize and start the core service components (Database, SSH Server, Web Server).
+	// Set up signal handling for graceful shutdown.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// Use an errgroup to manage background services.
+	g, ctx := errgroup.WithContext(ctx)
+
+	switch cmd {
+	case "start":
+		// Launch the Web server if enabled.
+		if cfg.Web.Enabled {
+			g.Go(func() error {
+				return sv_web.Run(ctx, cfg)
+			})
+		}
+		// TODO: Launch the SSH server if enabled.
+	default:
+		printUsage(stderr)
+		return fmt.Errorf("unknown command: %s", cmd)
+	}
+
+	// Wait for all background services to complete or for a termination signal.
+	if err := g.Wait(); err != nil {
+		return fmt.Errorf("application error: %w", err)
+	}
+
+	slog.Info("Application shut down gracefully")
 	return nil
 }
 
