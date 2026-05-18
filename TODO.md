@@ -34,15 +34,34 @@ To trigger work, you can prompt: **"Implement task [ID] from the TODO list."**
 
 ---
 
-### [SV-003] Implement SQLite Database Core
+### [SV-003] Implement SQLite Database Core & Migrations
 **Status**: `[ ]` Pending
 **Context / Files**:
 - New package: `internal/db`
 **Acceptance Criteria**:
-1. Create `internal/db/db.go` containing the connection pool setup and schema migrations.
-2. Ensure the SQLite file is created inside the application's `RootDir`.
-3. Break domain logic into separate files (e.g., `users.go`, `repositories.go`) rather than a monolithic file.
-4. Implement basic CRUD interfaces for users and organizations.
+1. Create `internal/db/db.go` to handle the SQLite connection pool (`database/sql` + modern `sqlite3` driver).
+2. Ensure the SQLite database file (`sourcevault.db`) is automatically created inside the application's `RootDir`.
+3. Build a lightweight migration engine to execute `CREATE TABLE IF NOT EXISTS` statements cleanly on startup.
+
+---
+
+### [SV-005] Implement User Data Model
+**Status**: `[ ]` Pending
+**Context / Files**:
+- `internal/db/users.go`
+**Acceptance Criteria**:
+1. Create the `users` SQL table migration in the database core.
+2. Implement CRUD interfaces (Create, Get, Update, Delete) for users.
+
+---
+
+### [SV-006] Implement Repository Data Model
+**Status**: `[ ]` Pending
+**Context / Files**:
+- `internal/db/repositories.go`
+**Acceptance Criteria**:
+1. Create the `repositories` SQL table migration (referencing the `users` table).
+2. Implement CRUD interfaces for repositories.
 
 ---
 
