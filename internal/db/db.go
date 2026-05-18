@@ -29,7 +29,6 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
-	"path/filepath"
 	"strings"
 
 	"sourcevault/internal/config"
@@ -45,10 +44,7 @@ func Initialize(cfg *config.Config) (*sql.DB, error) {
 
 	switch driver {
 	case "sqlite3", "sqlite":
-		// For SQLite, if the DSN isn't absolute, assume it's relative to RootDir.
-		if !filepath.IsAbs(dsn) && !strings.HasPrefix(dsn, "file:") {
-			dsn = filepath.Join(cfg.RootDir, dsn)
-		}
+		// The path is already sanitized to an absolute path in config.go
 		
 		// Append high-performance PRAGMAs to the connection string
 		// WAL mode ensures high concurrency without database locking.

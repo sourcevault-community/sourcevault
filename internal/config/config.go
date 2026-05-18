@@ -205,6 +205,27 @@ func (c *Config) sanitize() {
 			c.LogFile = abs
 		}
 	}
+
+	// Sanitize SQLite database path
+	if c.Database.Driver == "sqlite3" || c.Database.Driver == "sqlite" {
+		// If the DSN is not an absolute path and not a file URI
+		if !filepath.IsAbs(c.Database.DSN) && !strings.HasPrefix(c.Database.DSN, "file:") {
+			// If it's just a raw filename like 'sourcevault.db', place it inside the database folder
+			if !strings.Contains(c.Database.DSN, string(filepath.Separator)) {
+				c.Database.DSN = filepath.Join("database", c.Database.DSN)
+			}
+			
+			// Anchor relative paths to RootDir
+			c.Database.DSN = filepath.Join(c.RootDir, c.Database.DSN)
+		}
+		
+		// Ensure the resulting path is absolutely resolved
+		if !strings.HasPrefix(c.Database.DSN, "file:") {
+			if abs, err := filepath.Abs(c.Database.DSN); err == nil {
+				c.Database.DSN = abs
+			}
+		}
+	}
 }
 
 // normalizeLogLevel converts a raw log level string (e.g., from an environment variable)
