@@ -97,7 +97,7 @@ var startCmd = &cobra.Command{
 		if cfg.Metrics.Enabled {
 			started++
 			g.Go(func() error {
-				return metrics.RunServer(ctx, cfg)
+				return metrics.Run(ctx, cfg)
 			})
 		}
 

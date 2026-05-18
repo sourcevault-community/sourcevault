@@ -79,8 +79,8 @@ func StartCollector(ctx context.Context, rootDir string) {
 	}()
 }
 
-// RunServer starts a dedicated HTTP server for Prometheus metrics.
-func RunServer(ctx context.Context, cfg *config.Config) error {
+// Run starts a dedicated HTTP server for Prometheus metrics.
+func Run(ctx context.Context, cfg *config.Config) error {
 	slog.Info("Starting dedicated metrics server", "host", cfg.Metrics.Host, "port", cfg.Metrics.Port)
 	
 	mux := http.NewServeMux()
