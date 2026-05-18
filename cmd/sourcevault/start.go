@@ -36,6 +36,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 
+	"sourcevault/internal/db"
 	"sourcevault/internal/metrics"
 	"sourcevault/internal/version"
 	sv_web "sourcevault/internal/web"
@@ -83,6 +84,26 @@ var startCmd = &cobra.Command{
 		// Set up signal handling for graceful shutdown.
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
+
+		// Ensure the application root directory exists before starting background services.
+		if err := os.MkdirAll(cfg.RootDir, 0750); err != nil {
+			slog.Error("Failed to create root directory", "dir", cfg.RootDir, "error", err)
+			return fmt.Errorf("creating root directory: %w", err)
+		}
+
+		// Initialize Database Connection
+		dbConn, err := db.Initialize(cfg)
+		if err != nil {
+			slog.Error("Failed to initialize database", "error", err)
+			return fmt.Errorf("initializing database: %w", err)
+		}
+		defer dbConn.Close()
+
+		// Run Database Migrations
+		if err := db.RunMigrations(dbConn, cfg.Database.Driver); err != nil {
+			slog.Error("Failed to run database migrations", "error", err)
+			return fmt.Errorf("running migrations: %w", err)
+		}
 
 		// Use an errgroup to manage background services.
 		g, ctx := errgroup.WithContext(ctx)

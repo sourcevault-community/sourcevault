@@ -44,6 +44,14 @@ type Config struct {
 	Web      WebConfig     // Web contains configuration for the administrative web server and UI.
 	Ssh      SshConfig     // Ssh contains configuration for the built-in Git SSH server.
 	Metrics  MetricsConfig // Metrics contains configuration for the dedicated Prometheus metrics server.
+	Database DatabaseConfig // Database contains settings for the application's persistence layer.
+}
+
+// DatabaseConfig holds connection settings for the database layer.
+// It is designed to be agnostic, allowing seamless swaps between sqlite3 and postgres.
+type DatabaseConfig struct {
+	Driver string // Driver specifies the sql driver to use (default: "sqlite3")
+	DSN    string // DSN is the connection string (for sqlite3, this is a file path)
 }
 
 // WebConfig holds settings for the HTTP/HTTPS web interface and API.
@@ -106,6 +114,10 @@ func Load() (*Config, error) {
 			Host:    "127.0.0.1",
 			Port:    9090,
 		},
+		Database: DatabaseConfig{
+			Driver: "sqlite3",
+			DSN:    "sourcevault.db",
+		},
 	}
 
 	// Override global settings from environment variables if they are defined.
@@ -117,6 +129,14 @@ func Load() (*Config, error) {
 	}
 	if val := os.Getenv("SOURCEVAULT_LOG_LEVEL"); val != "" {
 		c.LogLevel = normalizeLogLevel(val)
+	}
+
+	// Override Database settings
+	if val := os.Getenv("SOURCEVAULT_DB_DRIVER"); val != "" {
+		c.Database.Driver = val
+	}
+	if val := os.Getenv("SOURCEVAULT_DB_DSN"); val != "" {
+		c.Database.DSN = val
 	}
 
 	// Override Web server settings from environment variables if they are defined.

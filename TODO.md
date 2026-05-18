@@ -34,14 +34,17 @@ To trigger work, you can prompt: **"Implement task [ID] from the TODO list."**
 
 ---
 
-### [SV-003] Implement SQLite Database Core & Migrations
+### [SV-003] Implement Database Abstraction Core & Migrations
 **Status**: `[ ]` Pending
 **Context / Files**:
+- `internal/config/config.go`
+- `sourcevault.env.sample`
 - New package: `internal/db`
 **Acceptance Criteria**:
-1. Create `internal/db/db.go` to handle the SQLite connection pool (`database/sql` + modern `sqlite3` driver).
-2. Ensure the SQLite database file (`sourcevault.db`) is automatically created inside the application's `RootDir`.
-3. Build a lightweight migration engine to execute `CREATE TABLE IF NOT EXISTS` statements cleanly on startup.
+1. Add a `DatabaseConfig` block to `config.go` supporting `Driver` (default "sqlite") and `DSN` (default "sourcevault.db").
+2. Create `internal/db/db.go` to handle the connection pool (`database/sql`), structuring the initialization to support a `switch` statement for future drivers (postgres/mysql).
+3. Ensure the SQLite database file (`sourcevault.db`) is automatically created inside the application's `RootDir` if the driver is "sqlite".
+4. Build a lightweight migration engine that is dialect-aware (to support different `CREATE TABLE` syntax later on).
 
 ---
 

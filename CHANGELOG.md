@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Agnostic Database Core**: Implemented a highly concurrent SQLite connection pool (via `mattn/go-sqlite3`) abstracted via `database/sql` for future Postgres/MySQL support.
+- **Dialect-Aware Migrations**: Built a lightweight startup schema migration engine.
+
+### Added
 - Generated a `favicon.ico` from the SourceVault logo and added a `/favicon.ico` route to the web server to serve it.
 - Added a copyright footer to the `coming_soon.html` landing page template.
 - Refactored `cmd/sourcevault` to load configuration and initialize logging via `rootCmd.PersistentPreRunE` so all future subcommands inherit this setup automatically.
