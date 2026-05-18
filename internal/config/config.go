@@ -116,7 +116,7 @@ func Load() (*Config, error) {
 		},
 		Database: DatabaseConfig{
 			Driver: "sqlite3",
-			DSN:    "sourcevault.db",
+			DSN:    "database/sourcevault.db",
 		},
 	}
 

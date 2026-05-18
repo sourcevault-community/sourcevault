@@ -31,6 +31,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -85,10 +86,23 @@ var startCmd = &cobra.Command{
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 
-		// Ensure the application root directory exists before starting background services.
-		if err := os.MkdirAll(cfg.RootDir, 0750); err != nil {
-			slog.Error("Failed to create root directory", "dir", cfg.RootDir, "error", err)
-			return fmt.Errorf("creating root directory: %w", err)
+		// Define and create required directory structure
+		dirs := []string{
+			cfg.RootDir,
+			filepath.Join(cfg.RootDir, "cache"),
+			filepath.Join(cfg.RootDir, "ca"),
+			filepath.Join(cfg.RootDir, "volumes"),
+		}
+		
+		if cfg.Database.Driver == "sqlite3" || cfg.Database.Driver == "sqlite" {
+			dirs = append(dirs, filepath.Join(cfg.RootDir, "database"))
+		}
+
+		for _, dir := range dirs {
+			if err := os.MkdirAll(dir, 0750); err != nil {
+				slog.Error("Failed to create required directory", "dir", dir, "error", err)
+				return fmt.Errorf("creating directory %s: %w", dir, err)
+			}
 		}
 
 		// Initialize Database Connection
