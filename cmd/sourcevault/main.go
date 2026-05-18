@@ -39,6 +39,7 @@ import (
 	svlog "sourcevault/internal/log"
 )
 
+// banner is the ASCII art visual identity displayed when the application starts.
 const banner = `
 ===========================================================================
  ####   ####  #    # #####   ####  ###### #    #   ##   #    # #      #####
@@ -52,7 +53,6 @@ const banner = `
 
 var (
 	// titleStyle defines the look of the main application title.
-	// It uses a purple background with bold white text.
 	titleStyle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color("#FAFAFA")).
@@ -66,7 +66,6 @@ var (
 			MarginTop(1)
 
 	// commandStyle highlights the command names in the list.
-	// It uses a green color and fixed width for alignment.
 	commandStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#04B575")).
 			Bold(true).
@@ -88,86 +87,78 @@ type command struct {
 	description	string
 }
 
-// commands is the list of available CLI commands and their descriptions
-// that are displayed when a user requests help or provides invalid arguments.
+// commands defines the list of supported CLI actions.
+// This list is used to generate the help menu and validate user input.
 var commands = []command{
 	{"help", "Display this message"},
 	{"start", "Start service"},
 }
 
 // main is the primary entry point for the SourceVault application.
-// It performs initial argument validation and delegates core execution
-// to the run function. If run returns an error, it is printed to
-// stderr and the application exits with a non-zero status.
 func main() {
-	// Ensure at least one command (e.g., 'start' or 'help') is provided.
+	// Simple argument check: the user must provide at least one command.
 	if len(os.Args) < 2 {
 		printUsage()
 		return
 	}
 
-	// Execute the application logic.
+	// Delegate the core logic to the run function.
+	// This approach facilitates easier testing and cleaner error handling.
 	if err := run(os.Args, os.Stdout, os.Stderr); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-// run handles the core startup and execution logic of the application.
-// Its responsibilities include:
-// 1. Displaying the ASCII banner to the console.
-// 2. Loading and validating the application configuration.
-// 3. Printing build-time information (version, git hash, etc.).
-// 4. Printing the active configuration for diagnostic purposes.
-// 5. Initializing and starting the required services (Web, SSH, etc.).
+// run orchestrates the application's bootstrap process.
 func run(args []string, stdout, stderr io.Writer) error {
-	// Display the visual identity of the application.
+	// Print the ASCII banner to the provided stdout writer.
 	fmt.Fprint(os.Stdout, banner)
 
-	// Load the configuration from environment variables and .env files.
+	// Step 1: Load application configuration.
+	// Configuration is sourced from environment variables and optional .env files.
 	cfg, err := config.Load()
 	if err != nil {
-		return fmt.Errorf("loading configuration: %s", err)
+		return fmt.Errorf("loading configuration: %w", err)
 	}
 
-	// Initialize the logger based on configuration
+	// Step 2: Initialize the logging system.
+	// The logger is configured based on the LogFile and LogLevel settings.
 	closeLog := svlog.Init(cfg)
 	defer closeLog()
 
+	// Step 3: Log application metadata.
+	// This helps in identifying the exact build running in a given environment.
 	slog.Info("Application is starting up", "name", version.Current.AppName, "version", version.Current.AppVersion)
 
-
-	// Output application build information to help with troubleshooting and support.
 	slog.Info("Application information",
 		"name", version.Current.AppName,
 		"version", version.Current.AppVersion,
 		"git_branch", version.Current.GitBranch,
 		"git_commit", version.Current.GitCommit,
+		"build_date", version.Current.BuildDate,
+		"architecture", version.Current.Architecture,
 	)
-	fmt.Printf("Application Information:\n")
-	fmt.Printf("- Name          :  %s\n", version.Current.AppName)
-	fmt.Printf("- Version       :  %s\n", version.Current.AppVersion)
-	fmt.Printf("- Git Branch    :  %s\n", version.Current.GitBranch)
-	fmt.Printf("- Git Commit    :  %s\n", version.Current.GitCommit)
-	fmt.Printf("- Build Date    :  %s\n", version.Current.BuildDate)
-	fmt.Printf("- Architecture  :  %s\n", version.Current.Architecture)
 
-	// Output the full parsed configuration for diagnostic and startup verification.
-	// This ensures the operator knows exactly which settings are being applied.
-	fmt.Printf("Configuration:\n")
-	fmt.Printf("- RootDir       :  %s\n", cfg.RootDir)
-	fmt.Printf("- LogFile       :  %s\n", cfg.LogFile)
-	fmt.Printf("- LogLevel      :  %s\n", cfg.LogLevel)
-	fmt.Printf("- Web server configuration:\n")
-	fmt.Printf("  - Enabled     :  %t\n", cfg.Web.Enabled)
-	fmt.Printf("  - Host        :  %s\n", cfg.Web.Host)
-	fmt.Printf("  - Port        :  %d\n", cfg.Web.Port)
-	fmt.Printf("- SSH server configuration:\n")
-	fmt.Printf("  - Enabled     :  %t\n", cfg.Ssh.Enabled)
-	fmt.Printf("  - Host        :  %s\n", cfg.Ssh.Host)
-	fmt.Printf("  - Port        :  %d\n", cfg.Ssh.Port)
+	// Step 4: Log the parsed configuration at DEBUG level.
+	// This is invaluable for troubleshooting environment-specific setup issues.
+	slog.Debug("Base configuration",
+		"root_dir", cfg.RootDir,
+		"log_file", cfg.LogFile,
+		"log_level", cfg.LogLevel,
+	)
+	slog.Debug("Web server configuration",
+		"enabled", cfg.Web.Enabled,
+		"host", cfg.Web.Host,
+		"port", cfg.Web.Port,
+	)
+	slog.Debug("SSH server configuration",
+		"enabled", cfg.Ssh.Enabled,
+		"host", cfg.Ssh.Host,
+		"port", cfg.Ssh.Port,
+	)
 
-	// TODO: Implement actual service startup logic based on the loaded configuration.
+	// TODO: Step 5: Initialize and start the core service components (Database, SSH Server, Web Server).
 	return nil
 }
 
