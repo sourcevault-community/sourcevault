@@ -27,14 +27,101 @@ package main
 
 import (
 	"fmt"
-	"os"
+	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+	"github.com/spf13/cobra"
+
+	"sourcevault/internal/config"
+	sv_log "sourcevault/internal/log"
 )
 
-// main is the primary entry point for the SourceVault application.
-// Execution logic is fully managed by the Cobra command routing framework in root.go.
-func main() {
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
+// banner is the ASCII art visual identity displayed when the application starts.
+const banner = `
+===========================================================================
+ ####   ####  #    # #####   ####  ###### #    #   ##   #    # #      #####
+#      #    # #    # #    # #    # #      #    #  #  #  #    # #        #
+ ####  #    # #    # #    # #      #####  #    # #    # #    # #        #
+     # #    # #    # #####  #      #      #    # ###### #    # #        #
+#    # #    # #    # #   #  #    # #       #  #  #    # #    # #        #
+ ####   ####   ####  #    #  ####  ######   ##   #    #  ####  ######   #
+===========================================================================
+`
+
+var (
+	subheadingStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#7D56F4")).
+			MarginTop(1)
+
+	commandStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#04B575")).
+			Bold(true).
+			Width(12)
+
+	descStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#A9A9A9"))
+
+	listStyle = lipgloss.NewStyle().
+			MarginLeft(2).
+			MarginBottom(1)
+)
+
+var (
+	appCfg   *config.Config
+	closeLog func()
+)
+
+var rootCmd = &cobra.Command{
+	Use:   "sourcevault",
+	Short: "SourceVault: The Federated Code Collaboration Platform",
+	Long:  banner + "\nSourceVault is an open-source decentralized Git hosting platform.",
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		// Do not initialize heavy resources if just calling help
+		if cmd.Name() == "help" {
+			return nil
+		}
+
+		cfg, err := config.Load()
+		if err != nil {
+			return fmt.Errorf("loading configuration: %w", err)
+		}
+		appCfg = cfg
+		closeLog = sv_log.Init(cfg)
+
+		return nil
+	},
+	PersistentPostRun: func(cmd *cobra.Command, args []string) {
+		if closeLog != nil {
+			closeLog()
+		}
+	},
+}
+
+func init() {
+	// Override the default Help function to retain the custom Lipgloss styling
+	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+		fmt.Fprint(cmd.OutOrStdout(), cmd.Long)
+		fmt.Fprint(cmd.OutOrStdout(), "\n\n")
+
+		fmt.Fprintln(cmd.OutOrStdout(), subheadingStyle.Render("Usage:"))
+		fmt.Fprintln(cmd.OutOrStdout(), listStyle.Render(cmd.UseLine()))
+
+		if cmd.HasAvailableSubCommands() {
+			fmt.Fprintln(cmd.OutOrStdout(), subheadingStyle.Render("Available Commands:"))
+			var sb strings.Builder
+			for _, subCmd := range cmd.Commands() {
+				if subCmd.IsAvailableCommand() || subCmd.Name() == "help" {
+					sb.WriteString(commandStyle.Render(subCmd.Name()))
+					sb.WriteString(descStyle.Render(subCmd.Short))
+					sb.WriteString("\n")
+				}
+			}
+			fmt.Fprint(cmd.OutOrStdout(), listStyle.Render(sb.String()))
+		}
+
+		if cmd.HasAvailableLocalFlags() {
+			fmt.Fprintln(cmd.OutOrStdout(), subheadingStyle.Render("Flags:"))
+			fmt.Fprintln(cmd.OutOrStdout(), listStyle.Render(cmd.LocalFlags().FlagUsages()))
+		}
+	})
 }
