@@ -23,73 +23,75 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.                                                                //
 // ===================================================================================================================================== //
 
-package main
+package web
 
 import (
-	"bytes"
-	"testing"
+	"context"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"sourcevault"
+	"sourcevault/internal/config"
 )
 
-// TestRun verifies that the core application bootstrap process (run function)
-// executes successfully and produces the expected output to stdout.
-func TestRun(t *testing.T) {
-	t.Run("start command", func(t *testing.T) {
-		stdout := &bytes.Buffer{}
-		stderr := &bytes.Buffer{}
-		args := []string{"sourcevault", "start"}
+func Handler() http.Handler {
+	mux := http.NewServeMux()
 
-		err := run(args, stdout, stderr)
+	// Root handler serves the modern Coming Soon template.
+	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		content, err := sourcevault.Templates.ReadFile("templates/coming_soon.html")
 		if err != nil {
-			t.Fatalf("run() failed: %v", err)
+			http.Error(w, "Template not found", http.StatusInternalServerError)
+			return
 		}
-
-		if stdout.Len() == 0 {
-			t.Error("expected output to stdout, got nothing")
-		}
+		w.Header().Set("Content-Type", "text/html")
+		w.Write(content)
 	})
 
-	t.Run("help command", func(t *testing.T) {
-		stdout := &bytes.Buffer{}
-		stderr := &bytes.Buffer{}
-		args := []string{"sourcevault", "help"}
-
-		err := run(args, stdout, stderr)
+	// Serve the embedded logo image.
+	mux.HandleFunc("GET /logo.png", func(w http.ResponseWriter, r *http.Request) {
+		content, err := sourcevault.Templates.ReadFile("templates/sourcevault-logo.png")
 		if err != nil {
-			t.Fatalf("run() failed: %v", err)
+			http.Error(w, "Image not found", http.StatusInternalServerError)
+			return
 		}
-
-		if !bytes.Contains(stdout.Bytes(), []byte("Usage:")) {
-			t.Error("expected output to contain usage information")
-		}
+		w.Header().Set("Content-Type", "image/png")
+		w.Write(content)
 	})
 
-	t.Run("unknown command", func(t *testing.T) {
-		stdout := &bytes.Buffer{}
-		stderr := &bytes.Buffer{}
-		args := []string{"sourcevault", "invalid"}
-
-		err := run(args, stdout, stderr)
-		if err == nil {
-			t.Error("expected error for unknown command, got nil")
-		}
-
-		if !bytes.Contains(stderr.Bytes(), []byte("Usage:")) {
-			t.Error("expected stderr to contain usage information")
-		}
+	// Status endpoint for health checks.
+	mux.HandleFunc("GET /status", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, "Status: OK")
 	})
+
+	// Example path parameter handler for name greetings.
+	// Uses Go 1.22+ mux path value extraction.
+	mux.HandleFunc("GET /hello/{name}", func(w http.ResponseWriter, r *http.Request) {
+		name := r.PathValue("name")
+		fmt.Fprintf(w, "Hello, %s!\n", name)
+	})
+
+	return mux
 }
 
-// TestPrintUsage ensures that the help menu is correctly formatted
-// and written to the provided output writer.
-func TestPrintUsage(t *testing.T) {
-	stdout := &bytes.Buffer{}
-	printUsage(stdout)
+func Run(ctx context.Context, cfg *config.Config) error {
+	slog.Info("Starting web server", "host", cfg.Web.Host, "port", cfg.Web.Port)
 
-	if stdout.Len() == 0 {
-		t.Error("expected output to stdout, got nothing")
+	srv := &http.Server{
+		Addr:    fmt.Sprintf("%s:%d", cfg.Web.Host, cfg.Web.Port),
+		Handler: Handler(),
 	}
 
-	if !bytes.Contains(stdout.Bytes(), []byte("Usage:")) {
-		t.Errorf("expected output to contain 'Usage:', got %s", stdout.String())
+	// Monitor the context for cancellation and trigger server shutdown.
+	go func() {
+		<-ctx.Done()
+		slog.Info("Shutting down web server")
+		srv.Shutdown(context.Background())
+	}()
+
+	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+		return fmt.Errorf("web server error: %w", err)
 	}
+
+	return nil
 }

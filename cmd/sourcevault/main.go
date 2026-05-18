@@ -112,6 +112,21 @@ func main() {
 
 // run orchestrates the application's bootstrap process.
 func run(args []string, stdout, stderr io.Writer) error {
+	// The first argument after the binary name is the command.
+	cmd := args[1]
+
+	switch cmd {
+	case "help":
+		printUsage(stdout)
+		return nil
+	case "start":
+		// Proceed with the bootstrap process for the 'start' command.
+		break
+	default:
+		printUsage(stderr)
+		return fmt.Errorf("unknown command: %s", cmd)
+	}
+
 	// Print the ASCII banner to the provided stdout writer.
 	fmt.Fprint(stdout, banner)
 	fmt.Fprint(stdout, "\n\n")

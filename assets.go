@@ -23,73 +23,11 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.                                                                //
 // ===================================================================================================================================== //
 
-package main
+package sourcevault
 
 import (
-	"bytes"
-	"testing"
+	"embed"
 )
 
-// TestRun verifies that the core application bootstrap process (run function)
-// executes successfully and produces the expected output to stdout.
-func TestRun(t *testing.T) {
-	t.Run("start command", func(t *testing.T) {
-		stdout := &bytes.Buffer{}
-		stderr := &bytes.Buffer{}
-		args := []string{"sourcevault", "start"}
-
-		err := run(args, stdout, stderr)
-		if err != nil {
-			t.Fatalf("run() failed: %v", err)
-		}
-
-		if stdout.Len() == 0 {
-			t.Error("expected output to stdout, got nothing")
-		}
-	})
-
-	t.Run("help command", func(t *testing.T) {
-		stdout := &bytes.Buffer{}
-		stderr := &bytes.Buffer{}
-		args := []string{"sourcevault", "help"}
-
-		err := run(args, stdout, stderr)
-		if err != nil {
-			t.Fatalf("run() failed: %v", err)
-		}
-
-		if !bytes.Contains(stdout.Bytes(), []byte("Usage:")) {
-			t.Error("expected output to contain usage information")
-		}
-	})
-
-	t.Run("unknown command", func(t *testing.T) {
-		stdout := &bytes.Buffer{}
-		stderr := &bytes.Buffer{}
-		args := []string{"sourcevault", "invalid"}
-
-		err := run(args, stdout, stderr)
-		if err == nil {
-			t.Error("expected error for unknown command, got nil")
-		}
-
-		if !bytes.Contains(stderr.Bytes(), []byte("Usage:")) {
-			t.Error("expected stderr to contain usage information")
-		}
-	})
-}
-
-// TestPrintUsage ensures that the help menu is correctly formatted
-// and written to the provided output writer.
-func TestPrintUsage(t *testing.T) {
-	stdout := &bytes.Buffer{}
-	printUsage(stdout)
-
-	if stdout.Len() == 0 {
-		t.Error("expected output to stdout, got nothing")
-	}
-
-	if !bytes.Contains(stdout.Bytes(), []byte("Usage:")) {
-		t.Errorf("expected output to contain 'Usage:', got %s", stdout.String())
-	}
-}
+//go:embed templates/*
+var Templates embed.FS
