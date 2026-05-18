@@ -103,6 +103,7 @@ var startCmd = &cobra.Command{
 				slog.Error("Failed to create required directory", "dir", dir, "error", err)
 				return fmt.Errorf("creating directory %s: %w", dir, err)
 			}
+			slog.Debug("Ensured required directory exists", "dir", dir)
 		}
 
 		// Initialize Database Connection
