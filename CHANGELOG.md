@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Implemented structured HTTP request logging middleware in the `internal/web` package to capture method, path, status, and duration.
+- Added explicit error logging for web server template and asset loading failures.
+- Implemented a wait mechanism in the `start` command to prevent immediate exit and allow for graceful shutdown.
 - Implemented comprehensive unit tests for core modules: `internal/config`, `internal/log`, `internal/version`, and the `main` application entry point.
 - Refactored `cmd/sourcevault/main.go` to use `io.Writer` parameters in `run` and `printUsage` for improved testability.
 - Implemented environment variable configuration loading in `internal/config/config.go` using `godotenv` to parse `.env` files.

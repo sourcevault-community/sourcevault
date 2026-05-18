@@ -32,7 +32,45 @@ import (
 	"net/http"
 	"sourcevault"
 	"sourcevault/internal/config"
+	"time"
 )
+
+// responseWriter is a minimal wrapper around http.ResponseWriter that captures
+// the HTTP status code. This allows the logging middleware to report the
+// outcome of each request.
+type responseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+// WriteHeader captures the status code before passing it to the underlying
+// ResponseWriter.
+func (rw *responseWriter) WriteHeader(code int) {
+	rw.statusCode = code
+	rw.ResponseWriter.WriteHeader(code)
+}
+
+// loggingMiddleware provides structured logging for every HTTP request.
+// It records the method, URL path, remote client address, resulting status code,
+// and the total processing duration.
+func loggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		// Default to 200 OK in case WriteHeader is never called explicitly.
+		rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+
+		next.ServeHTTP(rw, r)
+
+		duration := time.Since(start)
+		slog.Info("HTTP request",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"remote_addr", r.RemoteAddr,
+			"status", rw.statusCode,
+			"duration", duration,
+		)
+	})
+}
 
 func Handler() http.Handler {
 	mux := http.NewServeMux()
@@ -41,6 +79,7 @@ func Handler() http.Handler {
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		content, err := sourcevault.Templates.ReadFile("templates/coming_soon.html")
 		if err != nil {
+			slog.Error("failed to read coming_soon template", "error", err)
 			http.Error(w, "Template not found", http.StatusInternalServerError)
 			return
 		}
@@ -52,6 +91,7 @@ func Handler() http.Handler {
 	mux.HandleFunc("GET /logo.png", func(w http.ResponseWriter, r *http.Request) {
 		content, err := sourcevault.Templates.ReadFile("templates/sourcevault-logo.png")
 		if err != nil {
+			slog.Error("failed to read logo image", "error", err)
 			http.Error(w, "Image not found", http.StatusInternalServerError)
 			return
 		}
@@ -71,7 +111,8 @@ func Handler() http.Handler {
 		fmt.Fprintf(w, "Hello, %s!\n", name)
 	})
 
-	return mux
+	// Wrap the entire mux with the logging middleware.
+	return loggingMiddleware(mux)
 }
 
 func Run(ctx context.Context, cfg *config.Config) error {

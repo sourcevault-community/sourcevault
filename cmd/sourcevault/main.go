@@ -180,23 +180,39 @@ func run(args []string, stdout, stderr io.Writer) error {
 	// Use an errgroup to manage background services.
 	g, ctx := errgroup.WithContext(ctx)
 
+	// Keep track of how many services were successfully started.
+	var started int
+
 	switch cmd {
 	case "start":
 		// Launch the Web server if enabled.
 		if cfg.Web.Enabled {
+			started++
 			g.Go(func() error {
 				return sv_web.Run(ctx, cfg)
 			})
 		}
 		// TODO: Launch the SSH server if enabled.
+		if cfg.Ssh.Enabled {
+			// started++
+			// g.Go(func() error { ... })
+		}
 	default:
 		printUsage(stderr)
 		return fmt.Errorf("unknown command: %s", cmd)
 	}
 
-	// Wait for all background services to complete or for a termination signal.
-	if err := g.Wait(); err != nil {
-		return fmt.Errorf("application error: %w", err)
+	// If no services were enabled to start, we still wait for a signal
+	// to keep the application "running" as requested by the user,
+	// rather than exiting immediately.
+	if started == 0 {
+		slog.Warn("No services (Web/SSH) are enabled; waiting for interrupt signal")
+		<-ctx.Done()
+	} else {
+		// Wait for all background services to complete or for a termination signal.
+		if err := g.Wait(); err != nil {
+			return fmt.Errorf("application error: %w", err)
+		}
 	}
 
 	slog.Info("Application shut down gracefully")
