@@ -28,9 +28,11 @@ package main
 import (
 	"fmt"
 	"os"
+	"io"
 	"strings"
 	"github.com/charmbracelet/lipgloss"
 	"sourcevault/internal/version"
+	"sourcevault/internal/config"
 )
 
 const banner = `
@@ -96,13 +98,22 @@ func main() {
 		printUsage()
 		return
 	}
-	run()
+
+	if err := run(os.Args, os.Stdout, os.Stderr); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
 }
 
 // run handles the core startup and execution logic,
 // such as displaying the banner and initializing the server.
-func run() {
+func run(args []string, stdout, stderr io.Writer) error {
 	fmt.Fprint(os.Stdout, banner)
+
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("loading configuration: %s", err)
+	}
 
 	// Output application build information.
 	fmt.Printf("Application Information:\n")
@@ -112,6 +123,21 @@ func run() {
 	fmt.Printf("- Git Commit    :  %s\n", version.Current.GitCommit)
 	fmt.Printf("- Build Date    :  %s\n", version.Current.BuildDate)
 	fmt.Printf("- Architecture  :  %s\n", version.Current.Architecture)
+
+	// Output the full parsed configuration for diagnostic and startup verification.
+	fmt.Printf("Configuration:\n")
+	fmt.Printf("- RootDir       :  %s\n", cfg.RootDir)
+	fmt.Printf("- LogFile       :  %s\n", cfg.LogFile)
+	fmt.Printf("- LogLevel      :  %s\n", cfg.LogLevel)
+	fmt.Printf("- Web server configuration:\n")
+	fmt.Printf("  - Enabled     :  %t\n", cfg.Web.Enabled)
+	fmt.Printf("  - Host        :  %s\n", cfg.Web.Host)
+	fmt.Printf("  - Port        :  %d\n", cfg.Web.Port)
+	fmt.Printf("- SSH server configuration:\n")
+	fmt.Printf("  - Enabled     :  %t\n", cfg.Ssh.Enabled)
+	fmt.Printf("  - Host        :  %s\n", cfg.Ssh.Host)
+	fmt.Printf("  - Port        :  %d\n", cfg.Ssh.Port)
+	return nil
 }
 
 // printUsage displays the available commands and general usage instructions.

@@ -53,6 +53,9 @@ SourceVault is configured via environment variables. For local development, you 
 | `SOURCEVAULT_WEB_ENABLED` | Enable the administrative web server | `false` |
 | `SOURCEVAULT_WEB_HOST` | Web server bind address | `127.0.0.1` |
 | `SOURCEVAULT_WEB_PORT` | Web server bind port | `8080` |
+| `SOURCEVAULT_SSH_ENABLED` | Enable the built-in SSH server | `true` |
+| `SOURCEVAULT_SSH_HOST` | SSH server bind address | `0.0.0.0` |
+| `SOURCEVAULT_SSH_PORT` | SSH server bind port | `2222` |
 
 ## Development
 
