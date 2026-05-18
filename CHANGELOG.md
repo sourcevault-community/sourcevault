@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- Improved code documentation and readability in `internal/config/config.go` by adding comprehensive inline comments to structs and functions.
+- Improved code documentation and readability in `internal/config/config.go`, `internal/version/version.go`, and `cmd/sourcevault/main.go` by adding comprehensive inline comments to structs, functions, and application lifecycle logic.
 
 ### Added
 - Implemented environment variable configuration loading in `internal/config/config.go` using `godotenv` to parse `.env` files.

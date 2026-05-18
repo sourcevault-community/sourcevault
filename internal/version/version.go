@@ -31,26 +31,33 @@ import (
 )
 
 // VersionInfo holds all build and version details about the application.
-// This information is primarily populated at build time using ldflags.
+// This information is primarily populated at build time using ldflags
+// in the Makefile, allowing the binary to report its own identity.
 type VersionInfo struct {
-	AppName      string // The name of the application
-	AppVersion   string // The semantic version of the application
-	GitCommit    string // The short git commit hash from which the app was built
-	GitBranch    string // The git branch from which the app was built
-	BuildDate    string // The UTC timestamp when the binary was built
-	Architecture string // The architecture the binary was compiled for
+	AppName      string // AppName is the formal name of the application (e.g., "sourcevault").
+	AppVersion   string // AppVersion is the semantic version string (e.g., "0.1.0").
+	GitCommit    string // GitCommit is the short git commit hash from which the app was built.
+	GitBranch    string // GitBranch is the name of the git branch used during the build.
+	BuildDate    string // BuildDate is the UTC timestamp indicating when the binary was compiled.
+	Architecture string // Architecture is the target CPU architecture (e.g., amd64, arm64).
 }
 
 var (
-	appName    = "sourcevault"
+	// appName is the default application name, used if not overridden during build.
+	appName = "sourcevault"
+	// appVersion is the default semantic version.
 	appVersion = "0.1.0"
-	gitCommit  = "UNKNOWN"
-	gitBranch  = "UNKNOWN"
-	buildDate  = "UNKNOWN"
+	// gitCommit is a placeholder for the git commit hash.
+	gitCommit = "UNKNOWN"
+	// gitBranch is a placeholder for the git branch name.
+	gitBranch = "UNKNOWN"
+	// buildDate is a placeholder for the build timestamp.
+	buildDate = "UNKNOWN"
 )
 
 // Current contains the version information for the running application instance.
-// These unexported variables are overridden by Makefile LDFLAGS at compile time.
+// The fields are initialized using the variables defined above, which are
+// expected to be overridden by Makefile LDFLAGS at compile time.
 var Current = VersionInfo{
 	AppName:      appName,
 	AppVersion:   appVersion,

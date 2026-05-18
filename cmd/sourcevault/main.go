@@ -92,30 +92,41 @@ var commands = []command{
 }
 
 // main is the primary entry point for the SourceVault application.
-// It delegates execution to the run function.
+// It performs initial argument validation and delegates core execution
+// to the run function. If run returns an error, it is printed to
+// stderr and the application exits with a non-zero status.
 func main() {
+	// Ensure at least one command (e.g., 'start' or 'help') is provided.
 	if len(os.Args) < 2 {
 		printUsage()
 		return
 	}
 
+	// Execute the application logic.
 	if err := run(os.Args, os.Stdout, os.Stderr); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-// run handles the core startup and execution logic,
-// such as displaying the banner and initializing the server.
+// run handles the core startup and execution logic of the application.
+// Its responsibilities include:
+// 1. Displaying the ASCII banner to the console.
+// 2. Loading and validating the application configuration.
+// 3. Printing build-time information (version, git hash, etc.).
+// 4. Printing the active configuration for diagnostic purposes.
+// 5. Initializing and starting the required services (Web, SSH, etc.).
 func run(args []string, stdout, stderr io.Writer) error {
+	// Display the visual identity of the application.
 	fmt.Fprint(os.Stdout, banner)
 
+	// Load the configuration from environment variables and .env files.
 	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("loading configuration: %s", err)
 	}
 
-	// Output application build information.
+	// Output application build information to help with troubleshooting and support.
 	fmt.Printf("Application Information:\n")
 	fmt.Printf("- Name          :  %s\n", version.Current.AppName)
 	fmt.Printf("- Version       :  %s\n", version.Current.AppVersion)
@@ -125,6 +136,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	fmt.Printf("- Architecture  :  %s\n", version.Current.Architecture)
 
 	// Output the full parsed configuration for diagnostic and startup verification.
+	// This ensures the operator knows exactly which settings are being applied.
 	fmt.Printf("Configuration:\n")
 	fmt.Printf("- RootDir       :  %s\n", cfg.RootDir)
 	fmt.Printf("- LogFile       :  %s\n", cfg.LogFile)
@@ -137,6 +149,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 	fmt.Printf("  - Enabled     :  %t\n", cfg.Ssh.Enabled)
 	fmt.Printf("  - Host        :  %s\n", cfg.Ssh.Host)
 	fmt.Printf("  - Port        :  %d\n", cfg.Ssh.Port)
+
+	// TODO: Implement actual service startup logic based on the loaded configuration.
 	return nil
 }
 
