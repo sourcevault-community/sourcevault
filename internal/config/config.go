@@ -29,47 +29,56 @@ import (
 	"os"
 	"strings"
 	"strconv"
+	"path/filepath"
 
 	"github.com/joho/godotenv"
 )
 
 // Config represents the global application configuration.
+// It aggregates settings for data storage, logging, and the various
+// servers (Web and SSH) that make up the SourceVault platform.
 type Config struct {
-	RootDir  string    // The base directory for all sourcevault data and repositories
-	LogFile  string    // The path to the application log file
-	LogLevel string    // The minimum level of logs to emit (e.g. debug, info, warn, error)
-	Web      WebConfig // Configuration for the web server and UI
-	Ssh      SshConfig // Configuration for the Git SSH server
+	RootDir  string    // RootDir is the base directory for all sourcevault data and repositories.
+	LogFile  string    // LogFile is the path to the application log file, relative to RootDir if not absolute.
+	LogLevel string    // LogLevel specifies the minimum level of logs to emit (e.g., DEBUG, INFO, WARN, ERROR).
+	Web      WebConfig // Web contains configuration for the administrative web server and UI.
+	Ssh      SshConfig // Ssh contains configuration for the built-in Git SSH server.
 }
 
 // WebConfig holds settings for the HTTP/HTTPS web interface and API.
+// This interface allows for repository management and system administration.
 type WebConfig struct {
-	Enabled bool   // Whether the web server should be started
-	Host    string // The network interface/IP to bind the web server to
-	Port    int    // The port number for the web server
+	Enabled bool   // Enabled determines whether the web server should be started upon application launch.
+	Host    string // Host is the network interface or IP address to bind the web server to.
+	Port    int    // Port is the port number the web server will listen on.
 }
 
 // SshConfig holds settings for the built-in SSH server used for Git operations.
+// This server provides secure access for cloning, pushing, and pulling repositories.
 type SshConfig struct {
-	Enabled bool   // Whether the SSH server should be started
-	Host    string // The network interface/IP to bind the SSH server to
-	Port    int    // The port number for the SSH server (fixed unexported field typo)
+	Enabled bool   // Enabled determines whether the SSH server should be started upon application launch.
+	Host    string // Host is the network interface or IP address to bind the SSH server to.
+	Port    int    // Port is the port number the SSH server will listen on.
 }
 
-// Load initializes a Config instance with default values and overrides
-// them with values from environment variables if present.
+// Load initializes a Config instance by following a specific precedence order:
+// 1. Sensible default values are applied.
+// 2. Values are loaded from an environment file (defaulting to "sourcevault.env").
+// 3. Environment variables override any previously set values.
+// Finally, the configuration is sanitized to ensure valid paths and formats.
 func Load() (*Config, error) {
-	// Determine which environment file to load, defaulting to sourcevault.env
+	// Determine which environment file to load.
+	// The file path can be customized via the SOURCEVAULT_CONFIG_FILE environment variable.
 	envFile := os.Getenv("SOURCEVAULT_CONFIG_FILE")
 	if envFile == "" {
 		envFile = "sourcevault.env"
 	}
 
-	// Attempt to load the environment variables from the file.
-	// We ignore errors here since the file is optional.
+	// Attempt to load the environment variables from the specified file.
+	// If the file is missing or unreadable, we proceed with system environment variables and defaults.
 	_ = godotenv.Load(envFile)
 
-	// Initialize with sensible defaults
+	// Initialize the configuration with sensible defaults for a standard deployment.
 	c := &Config{
 		RootDir:  "/home/sourcevault",
 		LogFile:  "",
@@ -86,7 +95,7 @@ func Load() (*Config, error) {
 		},
 	}
 
-	// Override global settings from environment variables
+	// Override global settings from environment variables if they are defined.
 	if val := os.Getenv("SOURCEVAULT_ROOT_DIR"); val != "" {
 		c.RootDir = val
 	}
@@ -97,8 +106,9 @@ func Load() (*Config, error) {
 		c.LogLevel = normalizeLogLevel(val)
 	}
 
-	// Override Web server settings from environment variables
+	// Override Web server settings from environment variables if they are defined.
 	if val := os.Getenv("SOURCEVAULT_WEB_ENABLED"); val != "" {
+		// We use EqualFold for a case-insensitive boolean check.
 		c.Web.Enabled = strings.EqualFold(val, "true")
 	}
 	if val := os.Getenv("SOURCEVAULT_WEB_HOST"); val != "" {
@@ -110,8 +120,9 @@ func Load() (*Config, error) {
 		}
 	}
 
-	// Override SSH server settings from environment variables
+	// Override SSH server settings from environment variables if they are defined.
 	if val := os.Getenv("SOURCEVAULT_SSH_ENABLED"); val != "" {
+		// We use EqualFold for a case-insensitive boolean check.
 		c.Ssh.Enabled = strings.EqualFold(val, "true")
 	}
 	if val := os.Getenv("SOURCEVAULT_SSH_HOST"); val != "" {
@@ -122,11 +133,37 @@ func Load() (*Config, error) {
 			c.Ssh.Port = p
 		}
 	}
+
+	// Sanitize the final configuration to ensure path consistency and validity.
+	c.sanitize()
 	return c, nil
 }
 
-// normalizeLogLevel converts a raw log level string into a standardized
-// uppercase representation supported by the system.
+// sanitize ensures that all directory and file paths within the configuration
+// are converted to absolute paths. It also handles relative paths for the
+// log file by anchoring them to the RootDir.
+func (c *Config) sanitize() {
+	// Convert RootDir to an absolute path for consistent filesystem operations.
+	if abs, err := filepath.Abs(c.RootDir); err == nil {
+		c.RootDir = abs
+	}
+
+	// If a log file is specified, ensure it is an absolute path.
+	if c.LogFile != "" {
+		// If the path is relative, prefix it with the RootDir.
+		if !filepath.IsAbs(c.LogFile) {
+			c.LogFile = filepath.Join(c.RootDir, c.LogFile)
+		}
+		// Convert the final path to an absolute representation.
+		if abs, err := filepath.Abs(c.LogFile); err == nil {
+			c.LogFile = abs
+		}
+	}
+}
+
+// normalizeLogLevel converts a raw log level string (e.g., from an environment variable)
+// into a standardized uppercase representation (DEBUG, INFO, WARN, ERROR)
+// that is recognized by the application's logging system.
 func normalizeLogLevel(level string) string {
 	switch strings.ToUpper(strings.TrimSpace(level)) {
 	case "ERROR":
@@ -138,6 +175,7 @@ func normalizeLogLevel(level string) string {
 	case "INFO":
 		return "INFO"
 	default:
+		// Default to INFO if the provided level is unrecognized.
 		return "INFO"
 	}
 }
