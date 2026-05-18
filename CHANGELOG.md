@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Migrated CLI command routing and help generation to `github.com/spf13/cobra`.
+- Restructured `cmd/sourcevault/main.go` into `main.go`, `root.go`, and `start.go` for cleaner separation of concerns.
+- Adapted custom `lipgloss` styling into Cobra's `SetHelpFunc` template for consistent visual branding.
 - Implemented structured HTTP request logging middleware in the `internal/web` package to capture method, path, status, and duration.
 - Added explicit error logging for web server template and asset loading failures.
 - Implemented a wait mechanism in the `start` command to prevent immediate exit and allow for graceful shutdown.

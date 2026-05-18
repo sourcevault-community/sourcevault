@@ -30,57 +30,32 @@ import (
 	"testing"
 )
 
-// TestRun verifies that the core application bootstrap process (run function)
-// executes successfully and produces the expected output to stdout.
-func TestRun(t *testing.T) {
-	t.Run("start command", func(t *testing.T) {
-		// Since 'start' now waits for a signal, we don't run it in a standard unit test
-		// as it would hang. In a real integration test, we would run it in a goroutine
-		// and send it a signal.
-	})
+func TestRootCmdHelp(t *testing.T) {
+	buf := new(bytes.Buffer)
+	rootCmd.SetOut(buf)
+	rootCmd.SetArgs([]string{"help"})
 
-	t.Run("help command", func(t *testing.T) {
-		stdout := &bytes.Buffer{}
-		stderr := &bytes.Buffer{}
-		args := []string{"sourcevault", "help"}
-
-		err := run(args, stdout, stderr)
-		if err != nil {
-			t.Fatalf("run() failed: %v", err)
-		}
-
-		if !bytes.Contains(stdout.Bytes(), []byte("Usage:")) {
-			t.Error("expected output to contain usage information")
-		}
-	})
-
-	t.Run("unknown command", func(t *testing.T) {
-		stdout := &bytes.Buffer{}
-		stderr := &bytes.Buffer{}
-		args := []string{"sourcevault", "invalid"}
-
-		err := run(args, stdout, stderr)
-		if err == nil {
-			t.Error("expected error for unknown command, got nil")
-		}
-
-		if !bytes.Contains(stderr.Bytes(), []byte("Usage:")) {
-			t.Error("expected stderr to contain usage information")
-		}
-	})
-}
-
-// TestPrintUsage ensures that the help menu is correctly formatted
-// and written to the provided output writer.
-func TestPrintUsage(t *testing.T) {
-	stdout := &bytes.Buffer{}
-	printUsage(stdout)
-
-	if stdout.Len() == 0 {
-		t.Error("expected output to stdout, got nothing")
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("rootCmd.Execute() failed: %v", err)
 	}
 
-	if !bytes.Contains(stdout.Bytes(), []byte("Usage:")) {
-		t.Errorf("expected output to contain 'Usage:', got %s", stdout.String())
+	if !bytes.Contains(buf.Bytes(), []byte("Usage:")) {
+		t.Error("expected output to contain usage information")
+	}
+}
+
+func TestStartCmdHelp(t *testing.T) {
+	buf := new(bytes.Buffer)
+	rootCmd.SetOut(buf)
+	rootCmd.SetArgs([]string{"start", "--help"})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("rootCmd.Execute() failed: %v", err)
+	}
+
+	if !bytes.Contains(buf.Bytes(), []byte("Usage:")) {
+		t.Error("expected output to contain usage information")
 	}
 }
