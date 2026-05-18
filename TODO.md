@@ -43,3 +43,15 @@ To trigger work, you can prompt: **"Implement task [ID] from the TODO list."**
 2. Ensure the SQLite file is created inside the application's `RootDir`.
 3. Break domain logic into separate files (e.g., `users.go`, `repositories.go`) rather than a monolithic file.
 4. Implement basic CRUD interfaces for users and organizations.
+
+---
+
+### [SV-004] Implement CA Subcommand
+**Status**: `[ ]` Pending
+**Context / Files**:
+- `cmd/sourcevault/ca.go` (new)
+- `internal/crypto` (new)
+**Acceptance Criteria**:
+1. Create a `sourcevault ca` subcommand with nested commands: `create`, `rotate`, and `revoke`.
+2. Implement Ed25519 key generation for SSH Certificate Authorities.
+3. Save public/private keypairs securely within the `RootDir`.
