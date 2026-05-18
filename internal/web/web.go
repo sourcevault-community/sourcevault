@@ -62,13 +62,20 @@ func loggingMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(rw, r)
 
 		duration := time.Since(start)
-		slog.Info("HTTP request",
+		args := []any{
 			"method", r.Method,
 			"path", r.URL.Path,
 			"remote_addr", r.RemoteAddr,
 			"status", rw.statusCode,
 			"duration", duration,
-		)
+		}
+
+		// Include X-Forwarded-For if it exists to help identify the original client IP.
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			args = append(args, "x_forwarded_for", xff)
+		}
+
+		slog.Info("HTTP request", args...)
 	})
 }
 
