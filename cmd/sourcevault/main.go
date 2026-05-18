@@ -36,7 +36,7 @@ import (
 
 	"sourcevault/internal/version"
 	"sourcevault/internal/config"
-	svlog "sourcevault/internal/log"
+	sv_log "sourcevault/internal/log"
 )
 
 // banner is the ASCII art visual identity displayed when the application starts.
@@ -125,7 +125,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 
 	// Step 2: Initialize the logging system.
 	// The logger is configured based on the LogFile and LogLevel settings.
-	closeLog := svlog.Init(cfg)
+	closeLog := sv_log.Init(cfg)
 	defer closeLog()
 
 	// Step 3: Log application metadata.
