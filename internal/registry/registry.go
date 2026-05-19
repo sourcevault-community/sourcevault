@@ -77,10 +77,10 @@ func EnsureRegistry(cfg *config.Config) error {
 		slog.Debug("Registry bare repository already exists", "path", bareRepo)
 	}
 
-	// Step 2: Bootstrap an initial commit if the bare repo has no commits yet.
-	// This handles both fresh installs and partially-initialized repos (e.g. a
-	// previous run that crashed after git init but before the push succeeded).
-	if !bareRepoHasCommits(bareRepo) {
+	// Step 2: Bootstrap an initial commit if the configured branch does not yet exist.
+	// This handles both fresh installs and partially-initialized repos where a previous
+	// run may have committed to a different default branch (e.g. master vs main).
+	if !bareRepoHasBranch(bareRepo, branch) {
 		if err := bootstrapInitialCommit(bareRepo, branch); err != nil {
 			return fmt.Errorf("bootstrapping registry: %w", err)
 		}
@@ -109,10 +109,11 @@ func EnsureRegistry(cfg *config.Config) error {
 	return nil
 }
 
-// bareRepoHasCommits checks whether a bare repository has at least one commit.
-// A freshly initialized bare repo has no HEAD ref, so rev-parse will fail.
-func bareRepoHasCommits(bareRepo string) bool {
-	err := runGit(bareRepo, "rev-parse", "HEAD")
+// bareRepoHasBranch checks whether a bare repository has a specific branch.
+// This is more precise than checking for any commits — it ensures the
+// configured branch exists, not just some other branch (e.g. master vs main).
+func bareRepoHasBranch(bareRepo, branch string) bool {
+	err := runGit(bareRepo, "rev-parse", "--verify", "refs/heads/"+branch)
 	return err == nil
 }
 
