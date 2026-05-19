@@ -39,6 +39,7 @@ import (
 
 	"sourcevault/internal/db"
 	"sourcevault/internal/metrics"
+	"sourcevault/internal/registry"
 	"sourcevault/internal/version"
 	sv_web "sourcevault/internal/web"
 )
@@ -86,12 +87,14 @@ var startCmd = &cobra.Command{
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 
-		// Define and create required directory structure
+		// Define and create required directory structure. The order matters:
+		// registry/ is included here so it exists before EnsureRegistry is called below.
 		dirs := []string{
 			cfg.RootDir,
 			filepath.Join(cfg.RootDir, "cache"),
 			filepath.Join(cfg.RootDir, "ca"),
 			filepath.Join(cfg.RootDir, "volumes"),
+			filepath.Join(cfg.RootDir, "registry"),
 		}
 
 		if cfg.Database.Driver == "sqlite3" || cfg.Database.Driver == "sqlite" {
@@ -104,6 +107,13 @@ var startCmd = &cobra.Command{
 				return fmt.Errorf("creating directory %s: %w", dir, err)
 			}
 			slog.Debug("Ensured required directory exists", "dir", dir)
+		}
+
+		// Ensure the Git-based system registry is initialized and the worktree is up to date.
+		// This runs before database initialization so a fresh node can seed the DB from registry state.
+		if err := registry.EnsureRegistry(cfg); err != nil {
+			slog.Error("Failed to ensure system registry", "error", err)
+			return fmt.Errorf("ensuring registry: %w", err)
 		}
 
 		// Initialize Database Connection

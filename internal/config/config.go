@@ -41,10 +41,18 @@ type Config struct {
 	RootDir  string    // RootDir is the base directory for all sourcevault data and repositories.
 	LogFile  string    // LogFile is the path to the application log file, relative to RootDir if not absolute.
 	LogLevel string    // LogLevel specifies the minimum level of logs to emit (e.g., DEBUG, INFO, WARN, ERROR).
-	Web      WebConfig     // Web contains configuration for the administrative web server and UI.
-	Ssh      SshConfig     // Ssh contains configuration for the built-in Git SSH server.
-	Metrics  MetricsConfig // Metrics contains configuration for the dedicated Prometheus metrics server.
+	Web      WebConfig      // Web contains configuration for the administrative web server and UI.
+	Ssh      SshConfig      // Ssh contains configuration for the built-in Git SSH server.
+	Metrics  MetricsConfig  // Metrics contains configuration for the dedicated Prometheus metrics server.
 	Database DatabaseConfig // Database contains settings for the application's persistence layer.
+	Registry RegistryConfig // Registry contains settings for the Git-based system registry.
+}
+
+// RegistryConfig holds settings for the Git-based system registry.
+// The registry is a bare Git repository that serves as the source of truth for all
+// system configuration data (users, volumes, repos, orgs, CA metadata).
+type RegistryConfig struct {
+	Branch string // Branch is the branch name used for the registry worktree (default: "main").
 }
 
 // DatabaseConfig holds connection settings for the database layer.
@@ -118,6 +126,9 @@ func Load() (*Config, error) {
 			Driver: "sqlite3",
 			DSN:    "database/sourcevault.db",
 		},
+		Registry: RegistryConfig{
+			Branch: "main",
+		},
 	}
 
 	// Override global settings from environment variables if they are defined.
@@ -131,12 +142,17 @@ func Load() (*Config, error) {
 		c.LogLevel = normalizeLogLevel(val)
 	}
 
-	// Override Database settings
+	// Override Database settings.
 	if val := os.Getenv("SOURCEVAULT_DB_DRIVER"); val != "" {
 		c.Database.Driver = val
 	}
 	if val := os.Getenv("SOURCEVAULT_DB_DSN"); val != "" {
 		c.Database.DSN = val
+	}
+
+	// Override Registry settings.
+	if val := os.Getenv("SOURCEVAULT_REGISTRY_BRANCH"); val != "" {
+		c.Registry.Branch = val
 	}
 
 	// Override Web server settings from environment variables if they are defined.

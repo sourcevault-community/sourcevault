@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Git-First System Registry** (`internal/registry`): Implemented `EnsureRegistry()` to bootstrap a bare Git repository and checked-out worktree at `RootDir/registry/` on startup. Handles three scenarios: fresh init, missing worktree clone, and force-sync of an existing worktree via `git reset --hard` to guarantee no merge conflicts.
 - **Agnostic Database Core**: Implemented a highly concurrent SQLite connection pool (via `mattn/go-sqlite3`) abstracted via `database/sql` for future Postgres/MySQL support.
 - **Dialect-Aware Migrations**: Built a lightweight startup schema migration engine.
 
