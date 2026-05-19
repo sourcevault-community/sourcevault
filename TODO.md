@@ -55,8 +55,11 @@ To trigger work, you can prompt: **"Implement task [ID] from the TODO list."**
 - `internal/registry/sync.go`
 **Acceptance Criteria**:
 1. Create the `users` SQL table migration in the database core.
-2. Implement CRUD interfaces (Create, Get, Update, Delete) for users.
-3. Implement `SaveUserMetadata(user)` and `RemoveUserMetadata(user)` in `internal/registry/sync.go` to write/delete `Users/{uuid}.yaml` in the registry worktree and commit the change.
+2. Implement CRUD interfaces (Create, Get, Update, Delete) for users. Every write operation must:
+   - Write `Users/{uuid}.yaml` to the registry worktree and commit.
+   - Write the same data to the SQLite database.
+   Both writes should be treated as a single logical operation — if the registry write fails, the DB write should not proceed.
+3. Implement `SyncUsersFromRegistry()` in `internal/registry/sync.go` to read all `Users/*.yaml` files and reconstruct the `users` table. This is the **recovery path only** (e.g. after DB corruption).
 
 ---
 
@@ -67,8 +70,11 @@ To trigger work, you can prompt: **"Implement task [ID] from the TODO list."**
 - `internal/registry/sync.go`
 **Acceptance Criteria**:
 1. Create the `repositories` SQL table migration (referencing the `users` table).
-2. Implement CRUD interfaces for repositories.
-3. Implement `SaveRepositoryMetadata(repo)` and `RemoveRepositoryMetadata(repo)` in `internal/registry/sync.go` to write/delete `Repositories/{uuid}.yaml` and commit the change.
+2. Implement CRUD interfaces for repositories. Every write operation must:
+   - Write `Repositories/{uuid}.yaml` to the registry worktree and commit.
+   - Write the same data to the SQLite database.
+   Both writes should be treated as a single logical operation — if the registry write fails, the DB write should not proceed.
+3. Implement `SyncRepositoriesFromRegistry()` in `internal/registry/sync.go` to read all `Repositories/*.yaml` files and reconstruct the `repositories` table. This is the **recovery path only**.
 
 ---
 
@@ -123,4 +129,5 @@ registry/
 5. Add `SOURCEVAULT_REGISTRY_BRANCH` config option (default: `main`) to support non-standard branch names.
 
 > [!NOTE]
-> Registry sync functions (`SaveUserMetadata`, `SaveRepositoryMetadata`, etc.) are implemented incrementally alongside each data model task (SV-005, SV-006, etc.) — not here.
+> The registry is the **source of truth**. The database is a queryable cache of it.
+> Sync functions always flow **registry → DB** (recovery only). Normal writes go to **both** simultaneously — registry first, then DB.
