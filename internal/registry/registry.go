@@ -50,9 +50,9 @@ var worktreeDirs = []string{
 // EnsureRegistry guarantees the system registry is in a consistent, readable state before
 // the rest of the application starts. It handles three distinct scenarios:
 //
-//  1. Fresh install: initializes the bare repo and clones a worktree.
-//  2. Existing install, first boot: clones the worktree from the existing bare repo.
-//  3. Existing install: force-syncs the worktree from the bare repo (no merges, no conflicts).
+//  1. Fresh install: initializes the bare repo and pushes the initial directory structure.
+//  2. Bare repo exists but has no commits (e.g. previous run crashed): re-runs the bootstrap.
+//  3. Existing install: clones the worktree if missing, or force-syncs if already present.
 func EnsureRegistry(cfg *config.Config) error {
 	bareRepo := filepath.Join(cfg.RootDir, "registry", "system.git")
 	worktree := filepath.Join(cfg.RootDir, "registry", "worktree")
@@ -60,14 +60,33 @@ func EnsureRegistry(cfg *config.Config) error {
 
 	// Step 1: Initialize the bare repository if it does not already exist.
 	if _, err := os.Stat(bareRepo); os.IsNotExist(err) {
-		if err := initBareRepo(bareRepo, branch); err != nil {
-			return fmt.Errorf("initializing registry bare repo: %w", err)
+		slog.Info("Initializing new system registry bare repository", "path", bareRepo)
+		if err := gitInitBare(bareRepo); err != nil {
+			return fmt.Errorf("git init --bare: %w", err)
+		}
+		// Set a consistent Git identity for all automated commits.
+		// This avoids "Please tell me who you are" errors in environments
+		// without a global git config present.
+		if err := gitConfigSet(bareRepo, "user.email", "noreply@sourcevault"); err != nil {
+			return err
+		}
+		if err := gitConfigSet(bareRepo, "user.name", "SourceVault"); err != nil {
+			return err
 		}
 	} else {
-		slog.Debug("Registry bare repository already exists, skipping init", "path", bareRepo)
+		slog.Debug("Registry bare repository already exists", "path", bareRepo)
 	}
 
-	// Step 2: Clone or sync the worktree.
+	// Step 2: Bootstrap an initial commit if the bare repo has no commits yet.
+	// This handles both fresh installs and partially-initialized repos (e.g. a
+	// previous run that crashed after git init but before the push succeeded).
+	if !bareRepoHasCommits(bareRepo) {
+		if err := bootstrapInitialCommit(bareRepo, branch); err != nil {
+			return fmt.Errorf("bootstrapping registry: %w", err)
+		}
+	}
+
+	// Step 3: Clone or sync the worktree.
 	if _, err := os.Stat(worktree); os.IsNotExist(err) {
 		slog.Info("Registry worktree not found, cloning from bare repository", "branch", branch)
 		if err := gitClone(bareRepo, worktree, branch); err != nil {
@@ -90,31 +109,20 @@ func EnsureRegistry(cfg *config.Config) error {
 	return nil
 }
 
-// initBareRepo initializes a new bare Git repository and pushes an initial commit
-// containing the required top-level directory structure.
-func initBareRepo(bareRepo, branch string) error {
-	slog.Info("Initializing new system registry bare repository", "path", bareRepo)
+// bareRepoHasCommits checks whether a bare repository has at least one commit.
+// A freshly initialized bare repo has no HEAD ref, so rev-parse will fail.
+func bareRepoHasCommits(bareRepo string) bool {
+	err := runGit(bareRepo, "rev-parse", "HEAD")
+	return err == nil
+}
 
-	// Create the bare repo.
-	if err := gitInitBare(bareRepo); err != nil {
-		return fmt.Errorf("git init --bare: %w", err)
-	}
-
-	// Set a consistent Git identity for all automated commits made by SourceVault.
-	// This avoids "Please tell me who you are" errors in environments without a global git config.
-	if err := gitConfigSet(bareRepo, "user.email", "noreply@sourcevault"); err != nil {
-		return err
-	}
-	if err := gitConfigSet(bareRepo, "user.name", "SourceVault"); err != nil {
-		return err
-	}
-
-	// Bootstrap the initial commit via a temporary clone.
-	// A freshly initialised bare repo has no commits and no branch yet, so we
-	// cannot clone it with --branch. We clone without checkout, build the structure,
-	// commit, and push — which creates the branch inside the bare repo.
+// bootstrapInitialCommit creates the initial directory structure and pushes the
+// first commit to the bare repository, which establishes the default branch.
+func bootstrapInitialCommit(bareRepo, branch string) error {
 	slog.Info("Bootstrapping initial registry directory structure")
 
+	// Use a temporary clone to build and push the initial commit, since you
+	// cannot commit directly to a bare repository.
 	tmpDir, err := os.MkdirTemp("", "sourcevault-registry-bootstrap-*")
 	if err != nil {
 		return fmt.Errorf("creating temp dir for bootstrap: %w", err)
@@ -124,8 +132,9 @@ func initBareRepo(bareRepo, branch string) error {
 		slog.Debug("Cleaned up bootstrap temp directory", "dir", tmpDir)
 	}()
 
-	// Clone the empty bare repo into the temp dir.
 	tmpWorktree := filepath.Join(tmpDir, "worktree")
+
+	// Clone the bare repo without specifying a branch — there are no branches yet.
 	if err := gitCloneNoCheckout(bareRepo, tmpWorktree); err != nil {
 		return fmt.Errorf("cloning for bootstrap: %w", err)
 	}
@@ -138,13 +147,12 @@ func initBareRepo(bareRepo, branch string) error {
 		return err
 	}
 
-	// Create each top-level directory with a .gitkeep so it is tracked by Git.
+	// Create each top-level directory with a .gitkeep so Git tracks them.
 	for _, dir := range worktreeDirs {
 		dirPath := filepath.Join(tmpWorktree, dir)
 		if err := os.MkdirAll(dirPath, 0o750); err != nil {
 			return fmt.Errorf("creating registry dir %s: %w", dir, err)
 		}
-		// Write a .gitkeep so the empty directory is tracked by Git.
 		keepPath := filepath.Join(dirPath, ".gitkeep")
 		if err := os.WriteFile(keepPath, []byte{}, 0o640); err != nil {
 			return fmt.Errorf("writing .gitkeep for %s: %w", dir, err)
@@ -152,7 +160,11 @@ func initBareRepo(bareRepo, branch string) error {
 		slog.Debug("Created registry directory", "dir", dir)
 	}
 
-	// Stage all new files, commit, and push to the bare repo to create the branch.
+	// Rename the default branch to match the configured branch name before committing.
+	if err := runGit(tmpWorktree, "checkout", "-b", branch); err != nil {
+		return fmt.Errorf("checking out branch %s: %w", branch, err)
+	}
+
 	if err := gitAdd(tmpWorktree, "."); err != nil {
 		return fmt.Errorf("staging initial registry structure: %w", err)
 	}
