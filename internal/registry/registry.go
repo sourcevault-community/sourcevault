@@ -172,7 +172,9 @@ func bootstrapInitialCommit(bareRepo, branch string) error {
 	if err := gitCommit(tmpWorktree, "chore: initialize system registry structure"); err != nil {
 		return fmt.Errorf("committing initial registry structure: %w", err)
 	}
-	if err := gitPush(tmpWorktree, "origin"); err != nil {
+	// Push with --set-upstream so the local branch tracks the remote,
+	// which is required on the very first push of a new branch.
+	if err := gitPushSetUpstream(tmpWorktree, "origin", branch); err != nil {
 		return fmt.Errorf("pushing initial registry structure: %w", err)
 	}
 
