@@ -52,9 +52,11 @@ To trigger work, you can prompt: **"Implement task [ID] from the TODO list."**
 **Status**: `[ ]` Pending
 **Context / Files**:
 - `internal/db/users.go`
+- `internal/registry/sync.go`
 **Acceptance Criteria**:
 1. Create the `users` SQL table migration in the database core.
 2. Implement CRUD interfaces (Create, Get, Update, Delete) for users.
+3. Implement `SaveUserMetadata(user)` and `RemoveUserMetadata(user)` in `internal/registry/sync.go` to write/delete `Users/{uuid}.yaml` in the registry worktree and commit the change.
 
 ---
 
@@ -62,9 +64,11 @@ To trigger work, you can prompt: **"Implement task [ID] from the TODO list."**
 **Status**: `[ ]` Pending
 **Context / Files**:
 - `internal/db/repositories.go`
+- `internal/registry/sync.go`
 **Acceptance Criteria**:
 1. Create the `repositories` SQL table migration (referencing the `users` table).
 2. Implement CRUD interfaces for repositories.
+3. Implement `SaveRepositoryMetadata(repo)` and `RemoveRepositoryMetadata(repo)` in `internal/registry/sync.go` to write/delete `Repositories/{uuid}.yaml` and commit the change.
 
 ---
 
@@ -114,6 +118,9 @@ registry/
    - If `registry/system.git` does not exist → `git init --bare`.
    - If `registry/worktree` does not exist → `git clone registry/system.git worktree`.
    - If worktree exists → `git fetch origin && git reset --hard origin/main` (force-sync, never merge).
-3. Create `internal/registry/sync.go` with functions to marshal/unmarshal the five top-level directories using YAML (UUID-based filenames, not usernames).
-4. Call `registry.EnsureRegistry(cfg)` in `start.go` **after** filesystem provisioning but **before** database migrations, so the DB can be seeded from registry state on a fresh node.
+3. Pre-create the five top-level directories inside the worktree (`Users/`, `Volumes/`, `Repositories/`, `Organizations/`, `CertificateAuthority/`) with a `.gitkeep` so they are tracked in the bare repo from the start.
+4. Call `registry.EnsureRegistry(cfg)` in `start.go` **after** filesystem provisioning but **before** database migrations.
 5. Add `SOURCEVAULT_REGISTRY_BRANCH` config option (default: `main`) to support non-standard branch names.
+
+> [!NOTE]
+> Registry sync functions (`SaveUserMetadata`, `SaveRepositoryMetadata`, etc.) are implemented incrementally alongside each data model task (SV-005, SV-006, etc.) — not here.
