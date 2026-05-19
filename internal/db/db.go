@@ -45,7 +45,7 @@ func Initialize(cfg *config.Config) (*sql.DB, error) {
 	switch driver {
 	case "sqlite3", "sqlite":
 		// The path is already sanitized to an absolute path in config.go
-		
+
 		// Append high-performance PRAGMAs to the connection string
 		// WAL mode ensures high concurrency without database locking.
 		// busy_timeout=5000 ensures queries wait 5s for locks before throwing 'database is locked'.

@@ -31,7 +31,7 @@ import (
 	"time"
 	"net/http"
 	"fmt"
-	
+
 	"sourcevault/internal/config"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -82,7 +82,7 @@ func StartCollector(ctx context.Context, rootDir string) {
 // Run starts a dedicated HTTP server for Prometheus metrics.
 func Run(ctx context.Context, cfg *config.Config) error {
 	slog.Info("Starting dedicated metrics server", "host", cfg.Metrics.Host, "port", cfg.Metrics.Port)
-	
+
 	mux := http.NewServeMux()
 	mux.Handle("GET /metrics", promhttp.Handler())
 

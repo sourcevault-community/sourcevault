@@ -152,7 +152,7 @@ func Load() (*Config, error) {
 			c.Web.Port = p
 		}
 	}
-	
+
 	// Override Metrics server settings from environment variables if they are defined.
 	if val := os.Getenv("SOURCEVAULT_METRICS_ENABLED"); val != "" {
 		c.Metrics.Enabled = strings.EqualFold(val, "true")
@@ -214,11 +214,11 @@ func (c *Config) sanitize() {
 			if !strings.Contains(c.Database.DSN, string(filepath.Separator)) {
 				c.Database.DSN = filepath.Join("database", c.Database.DSN)
 			}
-			
+
 			// Anchor relative paths to RootDir
 			c.Database.DSN = filepath.Join(c.RootDir, c.Database.DSN)
 		}
-		
+
 		// Ensure the resulting path is absolutely resolved
 		if !strings.HasPrefix(c.Database.DSN, "file:") {
 			if abs, err := filepath.Abs(c.Database.DSN); err == nil {

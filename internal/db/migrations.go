@@ -36,7 +36,7 @@ import (
 // It is dialect-aware to support different CREATE TABLE syntax across database engines.
 func RunMigrations(db *sql.DB, driver string) error {
 	driver = strings.ToLower(driver)
-	
+
 	// Ensure the schema_migrations table exists for all dialects.
 	if err := ensureMigrationsTable(db, driver); err != nil {
 		return err
@@ -64,7 +64,7 @@ func RunMigrations(db *sql.DB, driver string) error {
 		}
 
 		slog.Info("Applying database migration", "version", version)
-		
+
 		tx, err := db.Begin()
 		if err != nil {
 			return fmt.Errorf("beginning migration transaction: %w", err)

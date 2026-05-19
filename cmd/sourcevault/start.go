@@ -93,7 +93,7 @@ var startCmd = &cobra.Command{
 			filepath.Join(cfg.RootDir, "ca"),
 			filepath.Join(cfg.RootDir, "volumes"),
 		}
-		
+
 		if cfg.Database.Driver == "sqlite3" || cfg.Database.Driver == "sqlite" {
 			dirs = append(dirs, filepath.Join(cfg.RootDir, "database"))
 		}
