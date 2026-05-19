@@ -87,18 +87,20 @@ var startCmd = &cobra.Command{
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 
-		// Define and create required directory structure. The order matters:
-		// registry/ is included here so it exists before EnsureRegistry is called below.
+		// Define and create required directory structure. data/ groups all internal
+		// system state; volumes/ stays at root as it holds user repository data.
+		dataDir := filepath.Join(cfg.RootDir, "data")
 		dirs := []string{
 			cfg.RootDir,
-			filepath.Join(cfg.RootDir, "cache"),
-			filepath.Join(cfg.RootDir, "ca"),
+			dataDir,
+			filepath.Join(dataDir, "cache"),
+			filepath.Join(dataDir, "ca"),
+			filepath.Join(dataDir, "registry"),
 			filepath.Join(cfg.RootDir, "volumes"),
-			filepath.Join(cfg.RootDir, "registry"),
 		}
 
 		if cfg.Database.Driver == "sqlite3" || cfg.Database.Driver == "sqlite" {
-			dirs = append(dirs, filepath.Join(cfg.RootDir, "database"))
+			dirs = append(dirs, filepath.Join(dataDir, "database"))
 		}
 
 		for _, dir := range dirs {

@@ -54,8 +54,8 @@ var worktreeDirs = []string{
 //  2. Bare repo exists but has no commits (e.g. previous run crashed): re-runs the bootstrap.
 //  3. Existing install: clones the worktree if missing, or force-syncs if already present.
 func EnsureRegistry(cfg *config.Config) error {
-	bareRepo := filepath.Join(cfg.RootDir, "registry", "system.git")
-	worktree := filepath.Join(cfg.RootDir, "registry", "worktree")
+	bareRepo := filepath.Join(cfg.RootDir, "data", "registry", "system.git")
+	worktree := filepath.Join(cfg.RootDir, "data", "registry", "worktree")
 	branch := cfg.Registry.Branch
 
 	// Step 1: Initialize the bare repository if it does not already exist.

@@ -124,7 +124,7 @@ func Load() (*Config, error) {
 		},
 		Database: DatabaseConfig{
 			Driver: "sqlite3",
-			DSN:    "database/sourcevault.db",
+			DSN:    "data/database/sourcevault.db",
 		},
 		Registry: RegistryConfig{
 			Branch: "main",
@@ -226,9 +226,9 @@ func (c *Config) sanitize() {
 	if c.Database.Driver == "sqlite3" || c.Database.Driver == "sqlite" {
 		// If the DSN is not an absolute path and not a file URI
 		if !filepath.IsAbs(c.Database.DSN) && !strings.HasPrefix(c.Database.DSN, "file:") {
-			// If it's just a raw filename like 'sourcevault.db', place it inside the database folder
+			// If it's just a raw filename like 'sourcevault.db', place it in data/database/
 			if !strings.Contains(c.Database.DSN, string(filepath.Separator)) {
-				c.Database.DSN = filepath.Join("database", c.Database.DSN)
+				c.Database.DSN = filepath.Join("data", "database", c.Database.DSN)
 			}
 
 			// Anchor relative paths to RootDir
