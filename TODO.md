@@ -79,3 +79,41 @@ To trigger work, you can prompt: **"Implement task [ID] from the TODO list."**
 3. Save public/private keypairs securely within the `RootDir`, encrypted with a passphrase using `ssh.MarshalPrivateKeyWithPassphrase`.
 4. Implement an "Unseal" mechanism (similar to HashiCorp Vault) where the decrypted `ssh.Signer` is temporarily held in a thread-safe memory structure (`sync.RWMutex`), allowing users to self-sign keys without providing the CA password repeatedly.
 5. Provide an RPC or internal API to interface with the in-memory signer.
+
+---
+
+### [SV-007] Implement System Registry (Git-First Bootstrap)
+**Status**: `[ ]` Pending
+**Context / Files**:
+- `internal/registry` (new package)
+- `cmd/sourcevault/start.go`
+- `internal/config/config.go`
+- Reference: `/Users/jovens/Developer/OLD/projects/sourcevault-ssh/src/db/sync.go`
+
+**Background**:
+The system registry is a bare Git repository that acts as the application's source of truth for
+configuration data (users, volumes, repos, orgs, CA metadata). Because it defines where all
+dynamic volumes live, it must be bootstrapped at a fixed, known path before any other service
+reads configuration data.
+
+**Registry Layout (worktree)**:
+```
+registry/
+├── system.git/        ← bare repo (canonical source of truth, push target over SSH)
+└── worktree/          ← checked-out clone (what SourceVault reads at runtime)
+    ├── Users/         ← {uuid}.yaml per user
+    ├── Volumes/       ← {uuid}.yaml per volume definition
+    ├── Repositories/  ← {uuid}.yaml per repo
+    ├── Organizations/ ← {uuid}.yaml per org
+    └── CertificateAuthority/ ← CA metadata only (NO private keys — those live in RootDir/ca/)
+```
+
+**Acceptance Criteria**:
+1. Add `registry/` to the directory provisioning list in `start.go`.
+2. Create `internal/registry/registry.go` implementing `EnsureRegistry(cfg)`:
+   - If `registry/system.git` does not exist → `git init --bare`.
+   - If `registry/worktree` does not exist → `git clone registry/system.git worktree`.
+   - If worktree exists → `git fetch origin && git reset --hard origin/main` (force-sync, never merge).
+3. Create `internal/registry/sync.go` with functions to marshal/unmarshal the five top-level directories using YAML (UUID-based filenames, not usernames).
+4. Call `registry.EnsureRegistry(cfg)` in `start.go` **after** filesystem provisioning but **before** database migrations, so the DB can be seeded from registry state on a fresh node.
+5. Add `SOURCEVAULT_REGISTRY_BRANCH` config option (default: `main`) to support non-standard branch names.
