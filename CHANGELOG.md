@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **CA Bootstrap & Restoration Logic** (`internal/crypto`): Implemented `EnsureCA()` to automatically manage the application's Certificate Authority during startup.
+    - If local CA files are missing, it attempts to restore the currently active CA (including encrypted private key) from the system registry.
+    - If no CA exists in either the registry or on disk, it force-generates a new CA and registers it as the active authority.
+    - Supports automatic unsealing on startup if `SOURCEVAULT_CA_PASSPHRASE` is provided in the environment.
+- **Registry Active CA Tracking** (`internal/registry`): Updated the system registry to securely store encrypted CA private keys and track the authoritative CA via `ActiveCA.yaml`. This ensures consistent CA state across multi-node or restored environments.
 - **SSH Certificate Signing** (`cmd/sourcevault ca sign`): Implemented the ability to sign SSH public keys with the unsealed local CA. Supports user and host certificates, customizable principals, and validity periods. Automatically outputs the signed certificate to `[key]-cert.pub`.
 - **Crypto & Registry Unit Tests**: Developed a comprehensive test suite for `internal/crypto` and `internal/registry`.
     - `internal/crypto`: Verified Ed25519/RSA CA key generation, in-memory unsealing/sealing, certificate signing logic, and OpenSSH-compatible KRL production.

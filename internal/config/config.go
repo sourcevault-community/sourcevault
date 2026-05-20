@@ -54,6 +54,7 @@ type CAConfig struct {
 	DefaultKeyType   string // DefaultKeyType is the algorithm used when creating a CA ("ed25519" or "rsa"). Default: "ed25519".
 	DefaultRSABits   int    // DefaultRSABits is the RSA key size when DefaultKeyType is "rsa". Default: 4096.
 	DefaultValidDays int    // DefaultValidDays is the default certificate validity period in days. Default: 365.
+	Passphrase       string // Passphrase is the encryption key for the CA private key. If provided via SOURCEVAULT_CA_PASSPHRASE, the CA can be unsealed automatically.
 }
 
 // RegistryConfig holds settings for the Git-based system registry.
@@ -181,6 +182,9 @@ func Load() (*Config, error) {
 		if days, err := strconv.Atoi(val); err == nil {
 			c.CA.DefaultValidDays = days
 		}
+	}
+	if val := os.Getenv("SOURCEVAULT_CA_PASSPHRASE"); val != "" {
+		c.CA.Passphrase = val
 	}
 
 	// Override Web server settings from environment variables if they are defined.

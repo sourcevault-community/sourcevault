@@ -37,6 +37,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 
+	"sourcevault/internal/crypto"
 	"sourcevault/internal/db"
 	"sourcevault/internal/metrics"
 	"sourcevault/internal/registry"
@@ -116,6 +117,13 @@ var startCmd = &cobra.Command{
 		if err := registry.EnsureRegistry(cfg); err != nil {
 			slog.Error("Failed to ensure system registry", "error", err)
 			return fmt.Errorf("ensuring registry: %w", err)
+		}
+
+		// Ensure a valid Certificate Authority (CA) exists for SSH certificate signing.
+		// If missing, it will attempt to restore from registry or force-create a new one.
+		if err := crypto.EnsureCA(cfg, appSigner); err != nil {
+			slog.Error("Failed to ensure Certificate Authority", "error", err)
+			return fmt.Errorf("ensuring CA: %w", err)
 		}
 
 		// Initialize Database Connection

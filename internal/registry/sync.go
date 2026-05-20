@@ -40,22 +40,96 @@ import (
 )
 
 // CAMetadata is the registry representation of a local or trusted CA.
-// Private key material is NEVER included — only public metadata is written.
+// The private key is stored in its encrypted (sealed) form.
 type CAMetadata struct {
-	UUID        string    `yaml:"uuid"`
-	Name        string    `yaml:"name"`
-	Algorithm   string    `yaml:"algorithm"`
-	Fingerprint string    `yaml:"fingerprint"`
-	ValidFrom   time.Time `yaml:"valid_from"`
-	ValidUntil  time.Time `yaml:"valid_until"`
-	CreatedAt   time.Time `yaml:"created_at"`
-	Revoked     bool      `yaml:"revoked"`
-	RevokedAt   time.Time `yaml:"revoked_at,omitempty"`
+	UUID                string    `yaml:"uuid"`
+	Name                string    `yaml:"name"`
+	Algorithm           string    `yaml:"algorithm"`
+	Fingerprint         string    `yaml:"fingerprint"`
+	EncryptedPrivateKey string    `yaml:"encrypted_private_key"`
+	PublicKey           string    `yaml:"public_key"`
+	ValidFrom           time.Time `yaml:"valid_from"`
+	ValidUntil          time.Time `yaml:"valid_until"`
+	CreatedAt           time.Time `yaml:"created_at"`
+	Revoked             bool      `yaml:"revoked"`
+	RevokedAt           time.Time `yaml:"revoked_at,omitempty"`
 }
 
-// SaveCAMetadata writes CA public metadata to the registry worktree under
+// ActiveCAMetadata tracks which CA is currently authoritative for the node.
+type ActiveCAMetadata struct {
+	UUID      string    `yaml:"uuid"`
+	UpdatedAt time.Time `yaml:"updated_at"`
+}
+
+// GetActiveCA retrieves the metadata of the currently active CA from the registry.
+// Returns nil, nil if no CA is currently active.
+func GetActiveCA(cfg *config.Config) (*CAMetadata, error) {
+	worktree := filepath.Join(cfg.RootDir, "data", "registry", "worktree")
+	activePath := filepath.Join(worktree, "CertificateAuthority", "ActiveCA.yaml")
+
+	if _, err := os.Stat(activePath); os.IsNotExist(err) {
+		return nil, nil
+	}
+
+	data, err := os.ReadFile(activePath)
+	if err != nil {
+		return nil, fmt.Errorf("reading ActiveCA metadata: %w", err)
+	}
+
+	var active ActiveCAMetadata
+	if err := yaml.Unmarshal(data, &active); err != nil {
+		return nil, fmt.Errorf("parsing ActiveCA metadata: %w", err)
+	}
+
+	// Now load the actual CA metadata
+	caPath := filepath.Join(worktree, "CertificateAuthority", active.UUID+".yaml")
+	caData, err := os.ReadFile(caPath)
+	if err != nil {
+		return nil, fmt.Errorf("reading CA metadata for %s: %w", active.UUID, err)
+	}
+
+	var meta CAMetadata
+	if err := yaml.Unmarshal(caData, &meta); err != nil {
+		return nil, fmt.Errorf("parsing CA metadata for %s: %w", active.UUID, err)
+	}
+
+	return &meta, nil
+}
+
+// SetActiveCA marks a specific CA UUID as the active one in the registry.
+func SetActiveCA(cfg *config.Config, uuid string) error {
+	worktree := filepath.Join(cfg.RootDir, "data", "registry", "worktree")
+	caDir := filepath.Join(worktree, "CertificateAuthority")
+	activePath := filepath.Join(caDir, "ActiveCA.yaml")
+
+	slog.Info("Setting active CA in registry", "uuid", uuid)
+
+	active := ActiveCAMetadata{
+		UUID:      uuid,
+		UpdatedAt: time.Now().UTC(),
+	}
+
+	data, err := yaml.Marshal(&active)
+	if err != nil {
+		return fmt.Errorf("marshaling ActiveCA metadata: %w", err)
+	}
+
+	if err := os.WriteFile(activePath, data, 0o640); err != nil {
+		return fmt.Errorf("writing ActiveCA metadata file: %w", err)
+	}
+
+	if err := gitAdd(worktree, activePath); err != nil {
+		return fmt.Errorf("staging ActiveCA update: %w", err)
+	}
+	if err := gitCommit(worktree, "feat(ca): set active CA to "+uuid); err != nil {
+		return fmt.Errorf("committing ActiveCA update: %w", err)
+	}
+
+	return nil
+}
+
+// SaveCAMetadata writes CA metadata to the registry worktree under
 // CertificateAuthority/{uuid}.yaml and commits the change.
-// Private key material must never be passed to this function.
 func SaveCAMetadata(cfg *config.Config, meta CAMetadata) error {
 	worktree := filepath.Join(cfg.RootDir, "data", "registry", "worktree")
 	caDir := filepath.Join(worktree, "CertificateAuthority")
