@@ -72,36 +72,6 @@ registry/
 
 ---
 
-### [SV-005] Implement User Data Model
-**Status**: `[ ]` Pending
-**Context / Files**:
-- `internal/db/users.go`
-- `internal/registry/sync.go`
-**Acceptance Criteria**:
-1. Create the `users` SQL table migration in the database core.
-2. Implement CRUD interfaces (Create, Get, Update, Delete) for users. Every write operation must:
-   - Write `Users/{uuid}.yaml` to the registry worktree and commit.
-   - Write the same data to the SQLite database.
-   Both writes should be treated as a single logical operation — if the registry write fails, the DB write should not proceed.
-3. Implement `SyncUsersFromRegistry()` in `internal/registry/sync.go` to read all `Users/*.yaml` files and reconstruct the `users` table. This is the **recovery path only** (e.g. after DB corruption).
-
----
-
-### [SV-006] Implement Repository Data Model
-**Status**: `[ ]` Pending
-**Context / Files**:
-- `internal/db/repositories.go`
-- `internal/registry/sync.go`
-**Acceptance Criteria**:
-1. Create the `repositories` SQL table migration (referencing the `users` table).
-2. Implement CRUD interfaces for repositories. Every write operation must:
-   - Write `Repositories/{uuid}.yaml` to the registry worktree and commit.
-   - Write the same data to the SQLite database.
-   Both writes should be treated as a single logical operation — if the registry write fails, the DB write should not proceed.
-3. Implement `SyncRepositoriesFromRegistry()` in `internal/registry/sync.go` to read all `Repositories/*.yaml` files and reconstruct the `repositories` table. This is the **recovery path only**.
-
----
-
 ## Milestone: v0.2.0 — Security Core
 
 > CA infrastructure must be in place before SSH authentication is useful.
@@ -203,6 +173,36 @@ Operators on FIPS-compliant infrastructure must be able to restrict the allowed 
 2. Bind the server to the Host and Port specified in `cfg.Ssh`.
 3. Wire the server into the `errgroup` in `start.go` so it starts alongside the Web and Metrics servers.
 4. Ensure it respects `ctx.Done()` for graceful shutdown.
+
+---
+
+### [SV-005] Implement User Data Model
+**Status**: `[ ]` Pending
+**Context / Files**:
+- `internal/db/users.go`
+- `internal/registry/sync.go`
+**Acceptance Criteria**:
+1. Create the `users` SQL table migration in the database core.
+2. Implement CRUD interfaces (Create, Get, Update, Delete) for users. Every write operation must:
+   - Write `Users/{uuid}.yaml` to the registry worktree and commit.
+   - Write the same data to the SQLite database.
+   Both writes should be treated as a single logical operation — if the registry write fails, the DB write should not proceed.
+3. Implement `SyncUsersFromRegistry()` in `internal/registry/sync.go` to read all `Users/*.yaml` files and reconstruct the `users` table. This is the **recovery path only** (e.g. after DB corruption).
+
+---
+
+### [SV-006] Implement Repository Data Model
+**Status**: `[ ]` Pending
+**Context / Files**:
+- `internal/db/repositories.go`
+- `internal/registry/sync.go`
+**Acceptance Criteria**:
+1. Create the `repositories` SQL table migration (referencing the `users` table).
+2. Implement CRUD interfaces for repositories. Every write operation must:
+   - Write `Repositories/{uuid}.yaml` to the registry worktree and commit.
+   - Write the same data to the SQLite database.
+   Both writes should be treated as a single logical operation — if the registry write fails, the DB write should not proceed.
+3. Implement `SyncRepositoriesFromRegistry()` in `internal/registry/sync.go` to read all `Repositories/*.yaml` files and reconstruct the `repositories` table. This is the **recovery path only**.
 
 ---
 
