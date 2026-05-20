@@ -3,6 +3,12 @@
 This file is structured to be easily parsed and executed by an AI assistant.
 To trigger work, you can prompt: **"Implement task [ID] from the TODO list."**
 
+**Status Legend:**
+- `[ ]` Pending — not yet started
+- `[/]` In Progress — currently being implemented
+- `[~]` Testing — implemented, awaiting confirmation it works in production
+- `[x]` Completed — confirmed working
+
 ---
 
 ## Milestone: v0.1.0 — Foundation
@@ -25,7 +31,7 @@ To trigger work, you can prompt: **"Implement task [ID] from the TODO list."**
 ---
 
 ### [SV-007] Implement System Registry (Git-First Bootstrap)
-**Status**: `[ ]` Pending
+**Status**: `[~]` Testing
 **Context / Files**:
 - `internal/registry` (new package)
 - `cmd/sourcevault/start.go`
