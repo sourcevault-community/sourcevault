@@ -37,8 +37,8 @@ func TestCurrentVersion(t *testing.T) {
 		t.Errorf("expected AppName sourcevault, got %s", Current.AppName)
 	}
 
-	if Current.AppVersion != "0.1.0" {
-		t.Errorf("expected AppVersion 0.1.0, got %s", Current.AppVersion)
+	if Current.AppVersion != "0.2.0-dev" {
+		t.Errorf("expected AppVersion 0.2.0-dev, got %s", Current.AppVersion)
 	}
 
 	if Current.Architecture != runtime.GOARCH {

@@ -35,7 +35,7 @@ import (
 // in the Makefile, allowing the binary to report its own identity.
 type VersionInfo struct {
 	AppName      string // AppName is the formal name of the application (e.g., "sourcevault").
-	AppVersion   string // AppVersion is the semantic version string (e.g., "0.1.0").
+	AppVersion   string // AppVersion is the semantic version string (e.g., "0.2.0-dev").
 	GitCommit    string // GitCommit is the short git commit hash from which the app was built.
 	GitBranch    string // GitBranch is the name of the git branch used during the build.
 	BuildDate    string // BuildDate is the UTC timestamp indicating when the binary was compiled.
@@ -46,7 +46,7 @@ var (
 	// appName is the default application name, used if not overridden during build.
 	appName = "sourcevault"
 	// appVersion is the default semantic version.
-	appVersion = "0.1.0"
+	appVersion = "0.2.0-dev"
 	// gitCommit is a placeholder for the git commit hash.
 	gitCommit = "UNKNOWN"
 	// gitBranch is a placeholder for the git branch name.

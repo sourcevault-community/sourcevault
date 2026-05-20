@@ -17,37 +17,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Crypto & Registry Unit Tests**: Developed a comprehensive test suite for `internal/crypto` and `internal/registry`.
     - `internal/crypto`: Verified Ed25519/RSA CA key generation, in-memory unsealing/sealing, certificate signing logic, and OpenSSH-compatible KRL production.
     - `internal/registry`: Implemented integration tests with a temporary Git repository to verify CA metadata persistence and revocation workflows.
-- **Git-First System Registry** (`internal/registry`): Implemented `EnsureRegistry()` to bootstrap a bare Git repository and checked-out worktree at `RootDir/registry/` on startup. Handles three scenarios: fresh init, missing worktree clone, and force-sync of an existing worktree via `git reset --hard` to guarantee no merge conflicts.
-- **Agnostic Database Core**: Implemented a highly concurrent SQLite connection pool (via `mattn/go-sqlite3`) abstracted via `database/sql` for future Postgres/MySQL support.
-- **Dialect-Aware Migrations**: Built a lightweight startup schema migration engine.
+- **RPC Bridge for CLI-Server Communication** (`internal/rpc`): Implemented a Unix Domain Socket RPC server to allow the CLI to communicate with the running SourceVault daemon.
+- **Enhanced CA CLI**: Updated `ca status`, `ca unseal`, `ca seal`, and `ca sign` subcommands to prefer RPC communication with the active server, enabling live state management.
 - Generated a `favicon.ico` from the SourceVault logo and added a `/favicon.ico` route to the web server to serve it.
 - Added a copyright footer to the `coming_soon.html` landing page template.
 - Refactored `cmd/sourcevault` to load configuration and initialize logging via `rootCmd.PersistentPreRunE` so all future subcommands inherit this setup automatically.
 - Migrated CLI command routing and help generation to `github.com/spf13/cobra`.
 - Restructured `cmd/sourcevault/main.go` into `main.go`, `root.go`, and `start.go` for cleaner separation of concerns.
 - Adapted custom `lipgloss` styling into Cobra's `SetHelpFunc` template for consistent visual branding.
-- Implemented structured HTTP request logging middleware in the `internal/web` package to capture method, path, status, and duration.
-- Added explicit error logging for web server template and asset loading failures.
-- Implemented a wait mechanism in the `start` command to prevent immediate exit and allow for graceful shutdown.
-- Implemented comprehensive unit tests for core modules: `internal/config`, `internal/log`, `internal/version`, and the `main` application entry point.
-- Refactored `cmd/sourcevault/main.go` to use `io.Writer` parameters in `run` and `printUsage` for improved testability.
-- Implemented environment variable configuration loading in `internal/config/config.go` using `godotenv` to parse `.env` files.
-- Added comprehensive inline documentation explaining the configuration loading and override flow.
-- Documented `SOURCEVAULT_SSH_ENABLED`, `SOURCEVAULT_SSH_HOST`, and `SOURCEVAULT_SSH_PORT` in `README.md` and `sourcevault.env.sample` to match new `SshConfig` structures.
-- Added inline GoDoc comments to `cmd/sourcevault/main.go` for the configuration output block.
-- Embedded `WebConfig` and `SshConfig` within the main `Config` structure for hierarchical configuration management.
-- Created `internal/config/config.go` with `Config`, `WebConfig`, and `SshConfig` structures.
-- Added comprehensive GoDoc comments to all configuration structs in `internal/config`.
-- Integrated `internal/version` package into `cmd/sourcevault/main.go` to display application build metadata (version, git commit, build date, architecture) on startup.
-- Fully implemented `printUsage` in `cmd/sourcevault/main.go` using `lipgloss` styling and `strings.Builder` to output a formatted CLI help menu.
-- Defined the initial list of `commands` (`help`, `start`) for the CLI interface.
-- Added `lipgloss` dependency for rich terminal UI formatting.
-- Defined initial UI styling tokens (`titleStyle`, `commandStyle`, etc.) in `cmd/sourcevault/main.go`.
-- Implemented `printUsage` function with accompanying GoDoc comments.
-- Added comprehensive GoDoc comments to `cmd/sourcevault/main.go` functions (`main` and `run`).
-- Created `internal/version/version.go` to track application metadata (`AppName`, `AppVersion`, `GitCommit`, `GitBranch`, `BuildDate`, `Architecture`).
-- Added standard `Makefile` with targets for build, install, uninstall, run, clean, and test. Injects version info via `LDFLAGS`.
-- Added `.ai-rules.md` and `.cursorrules` to strictly enforce coding standards, changelog maintenance, commit hygiene, and pre-commit test execution for AI assistants.
-- Initialized base Go project structure and module (`sourcevault`).
-- Added initial `cmd/sourcevault/main.go` entrypoint with standard license `HEADER`.
-- Added standard `LICENSE`, `HEADER`, and `README.md` imported from previous PRJ.
+
+## [0.1.0] - 2026-05-18
+
+### Added
+- **Git-First System Registry** (`internal/registry`): Implemented `EnsureRegistry()` to bootstrap a bare Git repository and checked-out worktree at `RootDir/registry/` on startup.
+- **Agnostic Database Core**: Implemented a highly concurrent SQLite connection pool (via `mattn/go-sqlite3`) abstracted via `database/sql` for future Postgres/MySQL support.
+- **Dialect-Aware Migrations**: Built a lightweight startup schema migration engine.
+- **Structured Logging**: Implemented structured HTTP request logging middleware in the `internal/web` package.
+- **Unit Testing Foundation**: Implemented comprehensive unit tests for core modules: `internal/config`, `internal/log`, `internal/version`, and the `main` application entry point.
+- **Environment Configuration**: Implemented environment variable configuration loading in `internal/config/config.go` using `godotenv`.
+- **Project Identity**: Created `internal/version/version.go` to track application metadata and added standard `Makefile`.
+- **Foundation Structure**: Initialized base Go project structure, standard `LICENSE`, `HEADER`, and `README.md`.
