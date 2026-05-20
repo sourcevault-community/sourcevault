@@ -49,13 +49,13 @@ func EnsureCA(cfg *config.Config, dbConn *sql.DB, signer *CASigner) error {
 		return fmt.Errorf("creating CA directory: %w", err)
 	}
 
-	// Step 1: Get the current authoritative CA UUID.
+	// Step 1: Get the current authoritative CA UUID from registry.
 	activeUUID, err := registry.GetActiveCAUUID(cfg)
 	if err != nil {
-		return fmt.Errorf("getting active CA UUID: %w", err)
+		return fmt.Errorf("getting active CA UUID from registry: %w", err)
 	}
 
-	// Step 2: Retrieve all CA metadata from the registry for a full sync.
+	// Step 2: Retrieve all CA metadata from the registry for a full sync to database.
 	allMeta, err := registry.ListCAMetadata(cfg)
 	if err != nil {
 		return fmt.Errorf("listing CA metadata: %w", err)
@@ -67,30 +67,40 @@ func EnsureCA(cfg *config.Config, dbConn *sql.DB, signer *CASigner) error {
 	}
 
 	slog.Debug("Starting CA metadata synchronization to database", "count", len(allMeta))
-
 	for _, meta := range allMeta {
 		isActive := (meta.UUID == activeUUID)
-
-		// Sync to DB cache.
 		if err := db.UpsertCA(dbConn, meta, isActive); err != nil {
 			slog.Warn("Failed to sync CA metadata to database cache", "uuid", meta.UUID, "error", err)
 		}
+	}
+	slog.Info("CA metadata synchronization complete", "active_uuid", activeUUID)
 
-		// If this is the active CA and local files are missing, restore them.
-		if isActive {
-			localPrivPath := filepath.Join(caDir, meta.UUID)
-			localPubPath := localPrivPath + ".pub"
+	// Step 3: Check that the local active CA file exists. If not, restore from database.
+	if activeUUID != "" {
+		localPrivPath := filepath.Join(caDir, activeUUID)
+		localPubPath := localPrivPath + ".pub"
 
-			if _, err := os.Stat(localPrivPath); os.IsNotExist(err) {
-				slog.Info("Local active CA missing, restoring from registry", "uuid", meta.UUID)
-				if err := restoreCA(&meta, localPrivPath, localPubPath); err != nil {
-					return fmt.Errorf("restoring CA from registry: %w", err)
-				}
+		if _, err := os.Stat(localPrivPath); os.IsNotExist(err) {
+			slog.Info("Local active CA files missing. Restoring from database cache...", "uuid", activeUUID)
+			
+			// Fetch the metadata back from the DB to ensure we use the cached version for restoration.
+			dbActive, err := db.GetActiveCA(dbConn)
+			if err != nil {
+				return fmt.Errorf("retrieving active CA from database for restoration: %w", err)
 			}
+			if dbActive == nil {
+				return fmt.Errorf("active CA %s not found in database after sync", activeUUID)
+			}
+
+			if err := restoreCA(dbActive, localPrivPath, localPubPath); err != nil {
+				return fmt.Errorf("restoring CA from database: %w", err)
+			}
+			slog.Info("Local active CA files restored successfully", "uuid", activeUUID)
+		} else {
+			slog.Debug("Local active CA files verified", "uuid", activeUUID)
 		}
 	}
 
-	slog.Info("CA metadata synchronization complete", "active_uuid", activeUUID)
 	return nil
 }
 

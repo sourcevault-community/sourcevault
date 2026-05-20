@@ -109,13 +109,14 @@ func TestEnsureCA(t *testing.T) {
 		t.Errorf("expected local CA files, found %d", len(files))
 	}
 
-	// 3. Test Restoration (local files gone, registry has data)
+	// 3. Test Restoration (local files gone, registry syncs to DB, then restores files from DB)
 	// Clear local files
 	os.RemoveAll(localCaDir)
 	os.MkdirAll(localCaDir, 0700)
 	signer.Seal()
 
-	// EnsureCA should restore but NOT unseal
+	// EnsureCA should sync from registry to DB, detect missing files, 
+	// and restore from the DB cache.
 	if err := EnsureCA(cfg, dbConn, signer); err != nil {
 		t.Fatalf("EnsureCA failed for restoration: %v", err)
 	}

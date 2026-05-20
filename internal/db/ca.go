@@ -123,3 +123,33 @@ func GetCAByUUID(db *sql.DB, uuid string) (*registry.CAMetadata, error) {
 
 	return &meta, nil
 }
+
+// GetActiveCA retrieves the metadata of the currently active CA from the database cache.
+func GetActiveCA(db *sql.DB) (*registry.CAMetadata, error) {
+	query := `SELECT uuid, name, algorithm, fingerprint, public_key, encrypted_private_key, revoked, revoked_at, created_at, valid_from, valid_until 
+	          FROM certificate_authorities WHERE is_active = 1`
+	
+	var meta registry.CAMetadata
+	err := db.QueryRow(query).Scan(
+		&meta.UUID,
+		&meta.Name,
+		&meta.Algorithm,
+		&meta.Fingerprint,
+		&meta.PublicKey,
+		&meta.EncryptedPrivateKey,
+		&meta.Revoked,
+		&meta.RevokedAt,
+		&meta.CreatedAt,
+		&meta.ValidFrom,
+		&meta.ValidUntil,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("querying active CA: %w", err)
+	}
+
+	return &meta, nil
+}
