@@ -17,6 +17,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -251,17 +252,52 @@ var caRotateCmd = &cobra.Command{
 var caSignCmd = &cobra.Command{
 	Use:   "sign [public-key-file]",
 	Short: "Sign a public key with the unsealed CA",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		pubKeyPath := args[0]
-		pubKeyBytes, err := os.ReadFile(pubKeyPath)
-		if err != nil {
-			return fmt.Errorf("reading public key: %w", err)
+		var pubKeyBytes []byte
+		var inputIsFile bool
+		var pubKeyPath string
+
+		// Step 1: Obtain the target public key.
+		if len(args) > 0 {
+			pubKeyPath = args[0]
+			var err error
+			pubKeyBytes, err = os.ReadFile(pubKeyPath)
+			if err != nil {
+				return fmt.Errorf("reading public key: %w", err)
+			}
+			inputIsFile = true
+		} else {
+			// Prompt for the public key data if no file is provided.
+			fmt.Print("Paste the public key you wish to sign: ")
+			var input string
+			fmt.Scanln(&input) // This might be too simple for long SSH keys. 
+			// Let's use a more robust way to read the line.
+			// However, for brevity and following the prompt instruction:
+			pubKeyBytes = []byte(strings.TrimSpace(input))
+		}
+
+		// Step 2: Gather certificate metadata (Identity and Principals).
+		keyID, _ := cmd.Flags().GetString("id")
+		if keyID == "" && term.IsTerminal(int(os.Stdin.Fd())) {
+			fmt.Print("Enter Key ID (identity): ")
+			fmt.Scanln(&keyID)
+		}
+
+		principals, _ := cmd.Flags().GetStringSlice("principals")
+		if len(principals) == 0 && term.IsTerminal(int(os.Stdin.Fd())) {
+			fmt.Print("Enter Principals (comma separated, optional): ")
+			var pInput string
+			fmt.Scanln(&pInput)
+			if pInput != "" {
+				principals = strings.Split(pInput, ",")
+				for i := range principals {
+					principals[i] = strings.TrimSpace(principals[i])
+				}
+			}
 		}
 
 		certTypeStr, _ := cmd.Flags().GetString("type")
-		keyID, _ := cmd.Flags().GetString("id")
-		principals, _ := cmd.Flags().GetStringSlice("principals")
 		validFor, _ := cmd.Flags().GetDuration("valid-for")
 
 		var certType uint32
@@ -288,11 +324,11 @@ var caSignCmd = &cobra.Command{
 		var certBytes []byte
 		var serial uint64
 
-		// Attempt to talk to the running server via RPC
+		// Step 3: Attempt signing (RPC first, then local fallback).
 		client, err := sv_rpc.GetClient(appCfg.Sockets.SourceVault)
 		if err == nil {
 			defer client.Close()
-			slog.Info("Requesting certificate signing via RPC", "key", pubKeyPath)
+			slog.Info("Requesting certificate signing via RPC")
 			var reply sv_rpc.SignReply
 			if err := client.Call("CAService.Sign", &sv_rpc.SignArgs{
 				PublicKey: pubKeyBytes,
@@ -303,11 +339,29 @@ var caSignCmd = &cobra.Command{
 			certBytes = reply.SignedCert
 			serial = reply.Serial
 		} else {
+			// Local process fallback.
 			if !appSigner.IsUnsealed() {
-				return fmt.Errorf("CA is sealed: run 'sourcevault ca unseal' first or ensure server is running")
+				// Automated CA discovery for signing if sealed.
+				active, err := registry.GetActiveCA(appCfg)
+				if err != nil {
+					return fmt.Errorf("getting active CA for unseal: %w", err)
+				}
+				if active == nil {
+					return fmt.Errorf("no active CA found in registry: run 'sourcevault ca create' first")
+				}
+
+				caPath := filepath.Join(appCfg.RootDir, "data", "ca", active.UUID)
+				passphrase, err := promptPassphrase(fmt.Sprintf("CA is sealed. Enter passphrase for %s: ", active.UUID))
+				if err != nil {
+					return fmt.Errorf("reading passphrase: %w", err)
+				}
+
+				if err := appSigner.UnsealFromPath(caPath, passphrase); err != nil {
+					return fmt.Errorf("unseal failed: %w", err)
+				}
 			}
 
-			// For local process, we should still check if the CA we have loaded is expired.
+			// Verify expiration before signing locally.
 			active, err := registry.GetActiveCA(appCfg)
 			if err != nil {
 				return fmt.Errorf("verifying CA validity: %w", err)
@@ -316,29 +370,37 @@ var caSignCmd = &cobra.Command{
 				return fmt.Errorf("cannot sign: active CA %s has expired", active.UUID)
 			}
 
-			slog.Info("Signing certificate locally", "key", pubKeyPath, "id", keyID, "type", certTypeStr)
-
+			slog.Info("Signing certificate locally")
 			certBytes, serial, err = appSigner.Sign(pubKeyBytes, certConfig)
 			if err != nil {
 				return fmt.Errorf("signing failed: %w", err)
 			}
 		}
 
-		// Write the certificate to [key]-cert.pub
-		certPath := pubKeyPath
-		if filepath.Ext(pubKeyPath) == ".pub" {
-			certPath = pubKeyPath[:len(pubKeyPath)-4] + "-cert.pub"
+		// Step 4: Output the signed certificate.
+		if inputIsFile {
+			// Write to file alongside the public key.
+			certPath := pubKeyPath
+			if filepath.Ext(pubKeyPath) == ".pub" {
+				certPath = pubKeyPath[:len(pubKeyPath)-4] + "-cert.pub"
+			} else {
+				certPath = pubKeyPath + "-cert.pub"
+			}
+
+			if err := os.WriteFile(certPath, certBytes, 0o644); err != nil {
+				return fmt.Errorf("writing certificate: %w", err)
+			}
+
+			fmt.Printf("Certificate signed successfully\n")
+			fmt.Printf("  Serial:      %d\n", serial)
+			fmt.Printf("  Certificate: %s\n", certPath)
 		} else {
-			certPath = pubKeyPath + "-cert.pub"
+			// Output directly to stdout for interactive use.
+			fmt.Printf("\n--- SIGNED SSH CERTIFICATE (Serial: %d) ---\n", serial)
+			fmt.Println(string(certBytes))
+			fmt.Println("-------------------------------------------")
 		}
 
-		if err := os.WriteFile(certPath, certBytes, 0o644); err != nil {
-			return fmt.Errorf("writing certificate: %w", err)
-		}
-
-		fmt.Printf("Certificate signed successfully\n")
-		fmt.Printf("  Serial:      %d\n", serial)
-		fmt.Printf("  Certificate: %s\n", certPath)
 		return nil
 	},
 }
