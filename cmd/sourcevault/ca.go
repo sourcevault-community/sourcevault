@@ -121,7 +121,12 @@ var caCreateCmd = &cobra.Command{
 			return fmt.Errorf("saving CA metadata to registry: %w", err)
 		}
 
-		fmt.Printf("\nCA created successfully\n")
+		// Mark the newly created CA as the active one.
+		if err := registry.SetActiveCA(appCfg, caID); err != nil {
+			return fmt.Errorf("setting active CA in registry: %w", err)
+		}
+
+		fmt.Printf("\nCA created successfully and marked as active\n")
 		fmt.Printf("  UUID:        %s\n", caID)
 		fmt.Printf("  Algorithm:   %s\n", keyType)
 		fmt.Printf("  Fingerprint: %s\n", fingerprint)
