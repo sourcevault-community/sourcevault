@@ -8,17 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **CA Bootstrap & Restoration Logic** (`internal/crypto`): Implemented `EnsureCA()` to automatically manage the application's Certificate Authority during startup.
-    - If local CA files are missing, it attempts to restore the currently active CA (including encrypted private key) from the system registry.
-    - If no CA exists in either the registry or on disk, it force-generates a new CA and registers it as the active authority.
-    - Supports automatic unsealing on startup if `SOURCEVAULT_CA_PASSPHRASE` is provided in the environment.
-- **Registry Active CA Tracking** (`internal/registry`): Updated the system registry to securely store encrypted CA private keys and track the authoritative CA via `ActiveCA.yaml`. This ensures consistent CA state across multi-node or restored environments.
-- **SSH Certificate Signing** (`cmd/sourcevault ca sign`): Implemented the ability to sign SSH public keys with the unsealed local CA. Supports user and host certificates, customizable principals, and validity periods. Automatically outputs the signed certificate to `[key]-cert.pub`.
+- **DB-Backed CA Restoration** (`internal/crypto`): Enhanced `EnsureCA()` to restore missing local CA files from the SQLite database cache after registry synchronization. This provides a fast-recovery path if `data/ca/` is cleared.
+- **Full CA Metadata Sync** (`internal/registry`): Implemented a complete synchronization logic that seeds the SQLite database with the full history of CA metadata from the Git registry on every server startup.
+- **Streamlined CA Unsealing** (`cmd/sourcevault ca unseal`): Refactored the `unseal` command to automatically discover the active CA UUID and file path from the system registry, removing the need for the manual `--key` flag.
+- **CA Bootstrap Logic** (`internal/crypto`): Implemented automated management of the application's Certificate Authority during startup, ensuring local files are in sync with the registry's authoritative active CA.
+- **Registry Active CA Tracking** (`internal/registry`): Updated the system registry to securely store encrypted CA private keys and track the authoritative CA via `ActiveCA.yaml`.
+- **SSH Certificate Signing** (`cmd/sourcevault ca sign`): Implemented the ability to sign SSH public keys with the unsealed local CA via the CLI or RPC bridge.
+- **RPC Bridge for CLI-Server Communication** (`internal/rpc`): Implemented a Unix Domain Socket RPC server to allow the CLI to communicate with the running SourceVault daemon.
+- **Enhanced CA CLI**: Updated `ca status`, `ca unseal`, `ca seal`, and `ca sign` subcommands to prefer RPC communication with the active server, enabling live state management.
 - **Crypto & Registry Unit Tests**: Developed a comprehensive test suite for `internal/crypto` and `internal/registry`.
     - `internal/crypto`: Verified Ed25519/RSA CA key generation, in-memory unsealing/sealing, certificate signing logic, and OpenSSH-compatible KRL production.
     - `internal/registry`: Implemented integration tests with a temporary Git repository to verify CA metadata persistence and revocation workflows.
-- **RPC Bridge for CLI-Server Communication** (`internal/rpc`): Implemented a Unix Domain Socket RPC server to allow the CLI to communicate with the running SourceVault daemon.
-- **Enhanced CA CLI**: Updated `ca status`, `ca unseal`, `ca seal`, and `ca sign` subcommands to prefer RPC communication with the active server, enabling live state management.
 
 ## [0.1.0] - 2026-05-18
 

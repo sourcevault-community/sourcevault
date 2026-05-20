@@ -78,7 +78,7 @@ registry/
 > This milestone provides the cryptographic foundation the SSH server depends on.
 
 ### [SV-004] Implement Local CA Management
-**Status**: `[~]` Testing
+**Status**: `[x]` Completed
 **Context / Files**:
 - `cmd/sourcevault/ca.go`
 - `internal/crypto` (new files: `bootstrap.go`, `ca.go`, `signer.go`, `krl.go`)
@@ -89,14 +89,14 @@ registry/
 2. Implement key generation supporting **both** Ed25519 (default) and RSA-4096. Key type and parameters respect the active Crypto Policy (SV-010).
 3. Save encrypted public/private keypairs locally in `RootDir/data/ca/` and backup metadata (including encrypted private key) to the system registry.
 4. Implement an **automatic bootstrap logic** during server startup:
-   - If local CA files exist, use them.
-   - If missing locally, restore from the registry's **active CA**.
-   - If no active CA exists anywhere, force-generate a new one and register it.
+   - Perform a **full sync** of CA metadata from the Git registry to the SQLite database.
+   - If missing locally, restore the **active CA** files from the database cache.
 5. Track the authoritative CA in the registry via `ActiveCA.yaml` to prevent regression.
 6. Support automatic "Unseal" on startup if `SOURCEVAULT_CA_PASSPHRASE` is provided in the environment.
-7. Implement **Database Caching**: cache all CA metadata (UUID, fingerprint, algorithm, status) in the SQLite database for fast querying.
-8. Implement `sourcevault ca sign [pubkey]` to issue signed SSH certificates using the unsealed CA.
-9. Implement KRL (Key Revocation List) generation for OpenSSH compatibility.
+7. Implement **Database Caching**: cache all CA metadata (UUID, fingerprint, algorithm, status, sealed key) in the SQLite database for fast querying and restoration.
+8. Implement `sourcevault ca unseal` with **automated discovery** (no path flag required).
+9. Implement `sourcevault ca sign [pubkey]` to issue signed SSH certificates using the unsealed CA via the RPC bridge or local process.
+10. Implement KRL (Key Revocation List) generation for OpenSSH compatibility.
 
 ---
 
