@@ -27,6 +27,7 @@ import (
 
 	"sourcevault/internal/crypto"
 	"sourcevault/internal/registry"
+	sv_rpc "sourcevault/internal/rpc"
 )
 
 // caCmd is the root "sourcevault ca" subcommand.
@@ -102,17 +103,19 @@ var caCreateCmd = &cobra.Command{
 
 		_ = sum // fingerprint string is already computed via ssh package
 
-		// Write public metadata to the registry (private key material is never included).
+		// Write public metadata to the registry.
 		now := time.Now().UTC()
 		meta := registry.CAMetadata{
-			UUID:        caID,
-			Name:        name,
-			Algorithm:   keyType,
-			Fingerprint: fingerprint,
-			ValidFrom:   now,
-			ValidUntil:  now.Add(validFor),
-			CreatedAt:   now,
-			Revoked:     false,
+			UUID:                caID,
+			Name:                name,
+			Algorithm:           keyType,
+			Fingerprint:         fingerprint,
+			EncryptedPrivateKey: string(privPEM),
+			PublicKey:           string(pubKey),
+			ValidFrom:           now,
+			ValidUntil:          now.Add(validFor),
+			CreatedAt:           now,
+			Revoked:             false,
 		}
 		if err := registry.SaveCAMetadata(appCfg, meta); err != nil {
 			return fmt.Errorf("saving CA metadata to registry: %w", err)
@@ -132,23 +135,46 @@ var caCreateCmd = &cobra.Command{
 // caUnsealCmd handles "sourcevault ca unseal".
 var caUnsealCmd = &cobra.Command{
 	Use:   "unseal",
-	Short: "Decrypt and load the CA key into memory",
+	Short: "Decrypt and load the active CA key into memory",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		caPath, _ := cmd.Flags().GetString("key")
-		if caPath == "" {
-			return fmt.Errorf("--key is required: specify the path to the CA private key file")
+		// Find the active CA metadata from the registry.
+		active, err := registry.GetActiveCA(appCfg)
+		if err != nil {
+			return fmt.Errorf("getting active CA from registry: %w", err)
 		}
+		if active == nil {
+			return fmt.Errorf("no active CA found: run 'sourcevault ca create' first")
+		}
+
+		caPath := filepath.Join(appCfg.RootDir, "data", "ca", active.UUID)
 
 		passphrase, err := promptPassphrase("Enter CA passphrase: ")
 		if err != nil {
 			return fmt.Errorf("reading passphrase: %w", err)
 		}
 
+		// Attempt to talk to the running server via RPC
+		client, err := sv_rpc.GetClient(appCfg.Sockets.SourceVault)
+		if err == nil {
+			defer client.Close()
+			var reply sv_rpc.UnsealReply
+			if err := client.Call("CAService.Unseal", &sv_rpc.UnsealArgs{
+				CAPath:     caPath,
+				Passphrase: passphrase,
+			}, &reply); err != nil {
+				return fmt.Errorf("RPC error: %w", err)
+			}
+			if reply.Success {
+				fmt.Println("CA unsealed successfully (Server)")
+			}
+			return nil
+		}
+
 		if err := appSigner.UnsealFromPath(caPath, passphrase); err != nil {
 			return err
 		}
 
-		fmt.Println("CA unsealed. Certificate signing is now available.")
+		fmt.Println("CA unsealed. Certificate signing is now available (Local Process).")
 		return nil
 	},
 }
@@ -157,9 +183,24 @@ var caUnsealCmd = &cobra.Command{
 var caSealCmd = &cobra.Command{
 	Use:   "seal",
 	Short: "Clear the CA key from memory",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
+		// Attempt to talk to the running server via RPC
+		client, err := sv_rpc.GetClient(appCfg.Sockets.SourceVault)
+		if err == nil {
+			defer client.Close()
+			var reply sv_rpc.SealReply
+			if err := client.Call("CAService.Seal", &sv_rpc.SealArgs{}, &reply); err != nil {
+				return fmt.Errorf("RPC error: %w", err)
+			}
+			if reply.Success {
+				fmt.Println("CA sealed successfully (Server)")
+			}
+			return nil
+		}
+
 		appSigner.Seal()
-		fmt.Println("CA sealed.")
+		fmt.Println("CA sealed (Local Process).")
+		return nil
 	},
 }
 
@@ -167,12 +208,32 @@ var caSealCmd = &cobra.Command{
 var caStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Show whether the CA is currently unsealed",
-	Run: func(cmd *cobra.Command, args []string) {
-		if appSigner.IsUnsealed() {
-			fmt.Printf("Status: unsealed\nLoaded key: %s\n", appSigner.CAPath())
-		} else {
-			fmt.Println("Status: sealed")
+	RunE: func(cmd *cobra.Command, args []string) error {
+		// Attempt to talk to the running server via RPC
+		client, err := sv_rpc.GetClient(appCfg.Sockets.SourceVault)
+		if err == nil {
+			defer client.Close()
+			var reply sv_rpc.StatusReply
+			if err := client.Call("CAService.Status", &sv_rpc.StatusArgs{}, &reply); err != nil {
+				return fmt.Errorf("RPC error: %w", err)
+			}
+			fmt.Printf("CA Status (Server):\n")
+			fmt.Printf("  Unsealed:  %t\n", reply.IsUnsealed)
+			if reply.CAPath != "" {
+				fmt.Printf("  CA Path:   %s\n", reply.CAPath)
+			}
+			return nil
 		}
+
+		// Fallback to local process memory
+		if appSigner.IsUnsealed() {
+			fmt.Printf("CA Status (Local Process):\n")
+			fmt.Printf("  Unsealed:  true\nLoaded key: %s\n", appSigner.CAPath())
+		} else {
+			fmt.Printf("CA Status (Local Process):\n")
+			fmt.Printf("  Unsealed:  false\n")
+		}
+		return nil
 	},
 }
 
@@ -228,10 +289,6 @@ var caSignCmd = &cobra.Command{
 	Short: "Sign a public key with the unsealed CA",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if !appSigner.IsUnsealed() {
-			return fmt.Errorf("CA is sealed: run 'sourcevault ca unseal' first")
-		}
-
 		pubKeyPath := args[0]
 		pubKeyBytes, err := os.ReadFile(pubKeyPath)
 		if err != nil {
@@ -257,16 +314,41 @@ var caSignCmd = &cobra.Command{
 			validFor = time.Duration(appCfg.CA.DefaultValidDays) * 24 * time.Hour
 		}
 
-		slog.Info("Signing certificate", "key", pubKeyPath, "id", keyID, "type", certTypeStr)
-
-		certBytes, serial, err := appSigner.Sign(pubKeyBytes, crypto.CertConfig{
+		certConfig := crypto.CertConfig{
 			CertType:   certType,
 			KeyID:      keyID,
 			Principals: principals,
 			ValidFor:   validFor,
-		})
-		if err != nil {
-			return fmt.Errorf("signing failed: %w", err)
+		}
+
+		var certBytes []byte
+		var serial uint64
+
+		// Attempt to talk to the running server via RPC
+		client, err := sv_rpc.GetClient(appCfg.Sockets.SourceVault)
+		if err == nil {
+			defer client.Close()
+			slog.Info("Requesting certificate signing via RPC", "key", pubKeyPath)
+			var reply sv_rpc.SignReply
+			if err := client.Call("CAService.Sign", &sv_rpc.SignArgs{
+				PublicKey: pubKeyBytes,
+				Config:    certConfig,
+			}, &reply); err != nil {
+				return fmt.Errorf("RPC error: %w", err)
+			}
+			certBytes = reply.SignedCert
+			serial = reply.Serial
+		} else {
+			if !appSigner.IsUnsealed() {
+				return fmt.Errorf("CA is sealed: run 'sourcevault ca unseal' first or ensure server is running")
+			}
+
+			slog.Info("Signing certificate locally", "key", pubKeyPath, "id", keyID, "type", certTypeStr)
+
+			certBytes, serial, err = appSigner.Sign(pubKeyBytes, certConfig)
+			if err != nil {
+				return fmt.Errorf("signing failed: %w", err)
+			}
 		}
 
 		// Write the certificate to [key]-cert.pub
@@ -294,9 +376,6 @@ func init() {
 	caCreateCmd.Flags().Int("rsa-bits", 0, "RSA key size in bits (default from config, only used with --key-type=rsa)")
 	caCreateCmd.Flags().Duration("valid-for", 0, "Certificate validity period e.g. 8760h (default from config)")
 	caCreateCmd.Flags().String("name", "", "Human-readable label for this CA")
-
-	// ca unseal flags
-	caUnsealCmd.Flags().String("key", "", "Path to the CA private key file")
 
 	// ca revoke flags
 	caRevokeCmd.Flags().String("uuid", "", "UUID of the CA to revoke")
