@@ -19,12 +19,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - `internal/registry`: Implemented integration tests with a temporary Git repository to verify CA metadata persistence and revocation workflows.
 - **RPC Bridge for CLI-Server Communication** (`internal/rpc`): Implemented a Unix Domain Socket RPC server to allow the CLI to communicate with the running SourceVault daemon.
 - **Enhanced CA CLI**: Updated `ca status`, `ca unseal`, `ca seal`, and `ca sign` subcommands to prefer RPC communication with the active server, enabling live state management.
-- Generated a `favicon.ico` from the SourceVault logo and added a `/favicon.ico` route to the web server to serve it.
-- Added a copyright footer to the `coming_soon.html` landing page template.
-- Refactored `cmd/sourcevault` to load configuration and initialize logging via `rootCmd.PersistentPreRunE` so all future subcommands inherit this setup automatically.
-- Migrated CLI command routing and help generation to `github.com/spf13/cobra`.
-- Restructured `cmd/sourcevault/main.go` into `main.go`, `root.go`, and `start.go` for cleaner separation of concerns.
-- Adapted custom `lipgloss` styling into Cobra's `SetHelpFunc` template for consistent visual branding.
 
 ## [0.1.0] - 2026-05-18
 
@@ -37,3 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Environment Configuration**: Implemented environment variable configuration loading in `internal/config/config.go` using `godotenv`.
 - **Project Identity**: Created `internal/version/version.go` to track application metadata and added standard `Makefile`.
 - **Foundation Structure**: Initialized base Go project structure, standard `LICENSE`, `HEADER`, and `README.md`.
+- **Cobra CLI Integration**: Migrated CLI command routing and help generation to `github.com/spf13/cobra`.
+- **CLI Refactoring**: Restructured `cmd/sourcevault/main.go` into `main.go`, `root.go`, and `start.go` for cleaner separation of concerns.
+- **Improved Initialization**: Refactored `cmd/sourcevault` to load configuration and initialize logging via `rootCmd.PersistentPreRunE`.
+- **Branded CLI Help**: Adapted custom `lipgloss` styling into Cobra's `SetHelpFunc` template for consistent visual branding.
+- **Favicon Support**: Generated a `favicon.ico` from the SourceVault logo and added a `/favicon.ico` route to the web server.
+- **UI Polish**: Added a copyright footer to the `coming_soon.html` landing page template.
