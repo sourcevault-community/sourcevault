@@ -147,7 +147,7 @@ var startCmd = &cobra.Command{
 
 		// Start the SourceVault RPC server for IPC (CLI communication).
 		// This is required for 'ca status', 'unseal', etc. to talk to the running server.
-		if err := rpc.StartServer(ctx, cfg.Sockets.SourceVault, appSigner); err != nil {
+		if err := rpc.StartServer(ctx, cfg.Sockets.SourceVault, cfg, appSigner); err != nil {
 			slog.Error("Failed to start RPC server", "error", err)
 			return fmt.Errorf("starting RPC server: %w", err)
 		}

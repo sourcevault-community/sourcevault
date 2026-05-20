@@ -104,6 +104,12 @@ var caUnsealCmd = &cobra.Command{
 			return fmt.Errorf("no active CA found: run 'sourcevault ca create' first")
 		}
 
+		// Check if the CA has expired.
+		if time.Now().After(active.ValidUntil) {
+			return fmt.Errorf("CA %s expired on %s: run 'sourcevault ca rotate' to issue a new CA",
+				active.UUID, active.ValidUntil.Format(time.RFC3339))
+		}
+
 		caPath := filepath.Join(appCfg.RootDir, "data", "ca", active.UUID)
 
 		passphrase, err := promptPassphrase("Enter CA passphrase: ")
@@ -299,6 +305,15 @@ var caSignCmd = &cobra.Command{
 		} else {
 			if !appSigner.IsUnsealed() {
 				return fmt.Errorf("CA is sealed: run 'sourcevault ca unseal' first or ensure server is running")
+			}
+
+			// For local process, we should still check if the CA we have loaded is expired.
+			active, err := registry.GetActiveCA(appCfg)
+			if err != nil {
+				return fmt.Errorf("verifying CA validity: %w", err)
+			}
+			if active != nil && time.Now().After(active.ValidUntil) {
+				return fmt.Errorf("cannot sign: active CA %s has expired", active.UUID)
 			}
 
 			slog.Info("Signing certificate locally", "key", pubKeyPath, "id", keyID, "type", certTypeStr)

@@ -33,12 +33,16 @@ import (
 	"net/rpc"
 	"os"
 	"path/filepath"
+	"time"
 
+	"sourcevault/internal/config"
 	"sourcevault/internal/crypto"
+	"sourcevault/internal/registry"
 )
 
 // CAService provides RPC methods for managing the Certificate Authority.
 type CAService struct {
+	Config *config.Config
 	Signer *crypto.CASigner
 }
 
@@ -107,6 +111,15 @@ type SignReply struct {
 
 // Sign issues a signed SSH certificate.
 func (s *CAService) Sign(args *SignArgs, reply *SignReply) error {
+	// Security Check: Ensure the CA being used for signing has not expired.
+	active, err := registry.GetActiveCA(s.Config)
+	if err != nil {
+		return fmt.Errorf("verifying CA validity: %w", err)
+	}
+	if active != nil && time.Now().After(active.ValidUntil) {
+		return fmt.Errorf("cannot sign: active CA %s has expired", active.UUID)
+	}
+
 	cert, serial, err := s.Signer.Sign(args.PublicKey, args.Config)
 	if err != nil {
 		return err
@@ -117,7 +130,7 @@ func (s *CAService) Sign(args *SignArgs, reply *SignReply) error {
 }
 
 // StartServer starts the RPC server on a Unix Domain Socket.
-func StartServer(ctx context.Context, socketPath string, signer *crypto.CASigner) error {
+func StartServer(ctx context.Context, socketPath string, cfg *config.Config, signer *crypto.CASigner) error {
 	// Ensure the directory for the socket exists
 	if err := os.MkdirAll(filepath.Dir(socketPath), 0700); err != nil {
 		return fmt.Errorf("creating socket directory: %w", err)
@@ -126,7 +139,7 @@ func StartServer(ctx context.Context, socketPath string, signer *crypto.CASigner
 	// Remove existing socket if it exists
 	_ = os.Remove(socketPath)
 
-	service := &CAService{Signer: signer}
+	service := &CAService{Config: cfg, Signer: signer}
 	if err := rpc.Register(service); err != nil {
 		return fmt.Errorf("registering RPC service: %w", err)
 	}
