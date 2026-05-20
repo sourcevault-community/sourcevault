@@ -5,14 +5,14 @@
 // M  mmmmm..M M' .mmm. `M M  MMMMM  M MM  mmmm,  M M' .mmm. `M MM  mmmmmmmM M  MMMMM  M M' .mmmm  MM M  MMMMM  M M  MMMMMMMM Mmmm  mmmM //
 // M.      `YM M  MMMMM  M M  MMMMM  M M'        .M M  MMMMMooM M`      MMMM M  MMMMP  M M         `M M  MMMMM  M M  MMMMMMMM MMMM  MMMM //
 // MMMMMMM.  M M  MMMMM  M M  MMMMM  M MM  MMMb. "M M  MMMMMMMM MM  MMMMMMMM M  MMMM' .M M  MMMMM  MM M  MMMMM  M M  MMMMMMMM MMMM  MMMM //
-// M. .MMM'  M M. `MMM' .M M  `MMM'  M MM  MMMMM  M M. `MMM' .M MM  MMMMMMMM M  MMP' .MM M  MMMMM  MM Mb       dM M         M MMMM  MMMM //
+// M. .MMM'  M M. `MMM' .M M  `MMM'  M MM  MMMMM  M M. `MMM' .M MM  MMMMMMMM M  MMP' .MM M  MMMMM  MM M  `MMM'  M M  MMMMMMMM MMMM  MMMM //
+// Mb.     .dM MMb     dMM Mb       dM MM  MMMMM  M MM.     .dM MM        .M M     .dMMM M  MMMMM  MM Mb       dM M         M MMMM  MMMM //
 // MMMMMMMMMMM MMMMMMMMMMM MMMMMMMMMMM MMMMMMMMMMMM MMMMMMMMMMM MMMMMMMMMMMM MMMMMMMMMMM MMMMMMMMMMMM MMMMMMMMMMM MMMMMMMMMMM MMMMMMMMMM //
 // ===================================================================================================================================== //
 
 package main
 
 import (
-	"crypto/sha256"
 	"fmt"
 	"log/slog"
 	"os"
@@ -20,12 +20,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/term"
 
 	"sourcevault/internal/crypto"
+	"sourcevault/internal/db"
 	"sourcevault/internal/registry"
 	sv_rpc "sourcevault/internal/rpc"
 )
@@ -42,19 +42,16 @@ var caCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a new CA keypair",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		keyType, _ := cmd.Flags().GetString("key-type")
-		rsaBits, _ := cmd.Flags().GetInt("rsa-bits")
-		validFor, _ := cmd.Flags().GetDuration("valid-for")
-		name, _ := cmd.Flags().GetString("name")
+		// Initialize the database connection.
+		dbConn, err := db.Initialize(appCfg)
+		if err != nil {
+			return fmt.Errorf("initializing database: %w", err)
+		}
+		defer dbConn.Close()
 
-		if keyType == "" {
-			keyType = appCfg.CA.DefaultKeyType
-		}
-		if rsaBits == 0 {
-			rsaBits = appCfg.CA.DefaultRSABits
-		}
-		if validFor == 0 {
-			validFor = time.Duration(appCfg.CA.DefaultValidDays) * 24 * time.Hour
+		// Ensure the schema is up to date.
+		if err := db.RunMigrations(dbConn, appCfg.Database.Driver); err != nil {
+			return fmt.Errorf("running database migrations: %w", err)
 		}
 
 		// Prompt for passphrase with confirmation.
@@ -70,69 +67,25 @@ var caCreateCmd = &cobra.Command{
 			return fmt.Errorf("passphrases do not match")
 		}
 
-		slog.Info("Generating CA keypair", "key_type", keyType, "valid_for", validFor)
+		// Use the interactive passphrase for this creation.
+		appCfg.CA.Passphrase = string(passphrase)
 
-		privPEM, pubKey, err := crypto.GenerateCAKey(keyType, rsaBits, passphrase)
+		// Delegate creation logic to the crypto bootstrap module.
+		// This handles key generation, registry backup, and database caching.
+		if err := crypto.ForceCreateCA(appCfg, dbConn, appSigner); err != nil {
+			return fmt.Errorf("force-creating CA: %w", err)
+		}
+
+		active, err := registry.GetActiveCA(appCfg)
 		if err != nil {
-			return fmt.Errorf("generating CA key: %w", err)
+			return fmt.Errorf("verifying new active CA: %w", err)
 		}
 
-		// Derive paths and write key files.
-		caID := uuid.New().String()
-		caDir := filepath.Join(appCfg.RootDir, "data", "ca")
-		privPath := filepath.Join(caDir, caID)
-		pubPath := privPath + ".pub"
-
-		if err := os.WriteFile(privPath, privPEM, 0o600); err != nil {
-			return fmt.Errorf("writing private key: %w", err)
-		}
-		slog.Info("CA private key written", "path", privPath)
-
-		if err := os.WriteFile(pubPath, pubKey, 0o644); err != nil {
-			return fmt.Errorf("writing public key: %w", err)
-		}
-		slog.Info("CA public key written", "path", pubPath)
-
-		// Compute fingerprint from the public key bytes.
-		parsedPub, _, _, _, err := ssh.ParseAuthorizedKey(pubKey)
-		if err != nil {
-			return fmt.Errorf("parsing generated public key: %w", err)
-		}
-		sum := sha256.Sum256(parsedPub.Marshal())
-		fingerprint := ssh.FingerprintSHA256(parsedPub)
-
-		_ = sum // fingerprint string is already computed via ssh package
-
-		// Write public metadata to the registry.
-		now := time.Now().UTC()
-		meta := registry.CAMetadata{
-			UUID:                caID,
-			Name:                name,
-			Algorithm:           keyType,
-			Fingerprint:         fingerprint,
-			EncryptedPrivateKey: string(privPEM),
-			PublicKey:           string(pubKey),
-			ValidFrom:           now,
-			ValidUntil:          now.Add(validFor),
-			CreatedAt:           now,
-			Revoked:             false,
-		}
-		if err := registry.SaveCAMetadata(appCfg, meta); err != nil {
-			return fmt.Errorf("saving CA metadata to registry: %w", err)
-		}
-
-		// Mark the newly created CA as the active one.
-		if err := registry.SetActiveCA(appCfg, caID); err != nil {
-			return fmt.Errorf("setting active CA in registry: %w", err)
-		}
-
-		fmt.Printf("\nCA created successfully and marked as active\n")
-		fmt.Printf("  UUID:        %s\n", caID)
-		fmt.Printf("  Algorithm:   %s\n", keyType)
-		fmt.Printf("  Fingerprint: %s\n", fingerprint)
-		fmt.Printf("  Valid until: %s\n", now.Add(validFor).Format(time.RFC3339))
-		fmt.Printf("  Private key: %s\n", privPath)
-		fmt.Printf("  Public key:  %s\n", pubPath)
+		fmt.Printf("\nCA created successfully and registered as authoritative\n")
+		fmt.Printf("  UUID:        %s\n", active.UUID)
+		fmt.Printf("  Algorithm:   %s\n", active.Algorithm)
+		fmt.Printf("  Fingerprint: %s\n", active.Fingerprint)
+		fmt.Printf("  Valid until: %s\n", active.ValidUntil.Format(time.RFC3339))
 		return nil
 	},
 }
