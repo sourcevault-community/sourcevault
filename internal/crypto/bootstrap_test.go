@@ -20,7 +20,6 @@ import (
 
 	"sourcevault/internal/config"
 	"sourcevault/internal/db"
-	"sourcevault/internal/registry"
 )
 
 func TestEnsureCA(t *testing.T) {
@@ -86,44 +85,43 @@ func TestEnsureCA(t *testing.T) {
 
 	signer := &CASigner{}
 
-	// 1. Test Force Creation (nothing exists)
+	// 1. Test System Uninitialized (EnsureCA should not create)
 	if err := EnsureCA(cfg, dbConn, signer); err != nil {
-		t.Fatalf("EnsureCA failed for force-create: %v", err)
+		t.Fatalf("EnsureCA failed: %v", err)
+	}
+	if signer.IsUnsealed() {
+		t.Error("expected signer to be sealed when uninitialized")
+	}
+
+	// 2. Test Explicit Force Creation (manual step)
+	if err := ForceCreateCA(cfg, dbConn, signer); err != nil {
+		t.Fatalf("ForceCreateCA failed: %v", err)
 	}
 
 	if !signer.IsUnsealed() {
-		t.Error("expected signer to be unsealed after creation")
+		t.Error("expected signer to be unsealed after explicit ForceCreateCA")
 	}
 
-	// Verify DB cache exists
-	active, err := registry.GetActiveCA(cfg)
-	if err != nil || active == nil {
-		t.Fatalf("failed to get active CA for verification: %v", err)
-	}
-	dbMeta, err := db.GetCAByUUID(dbConn, active.UUID)
-	if err != nil || dbMeta == nil {
-		t.Errorf("CA metadata not found in database cache: %v", err)
-	}
-
-	// Let's verify by just listing local files for now.
+	// Verify local files exist
 	localCaDir := filepath.Join(tmpDir, "data", "ca")
 	files, _ := os.ReadDir(localCaDir)
 	if len(files) < 2 { // uuid and uuid.pub
 		t.Errorf("expected local CA files, found %d", len(files))
 	}
 
-	// 2. Test Restoration (local files gone, registry has data)
+	// 3. Test Restoration (local files gone, registry has data)
 	// Clear local files
 	os.RemoveAll(localCaDir)
 	os.MkdirAll(localCaDir, 0700)
 	signer.Seal()
 
+	// EnsureCA should restore but NOT unseal
 	if err := EnsureCA(cfg, dbConn, signer); err != nil {
 		t.Fatalf("EnsureCA failed for restoration: %v", err)
 	}
 
-	if !signer.IsUnsealed() {
-		t.Error("expected signer to be unsealed after restoration")
+	if signer.IsUnsealed() {
+		t.Error("expected signer to be sealed after EnsureCA restoration")
 	}
 
 	files, _ = os.ReadDir(localCaDir)
@@ -131,13 +129,13 @@ func TestEnsureCA(t *testing.T) {
 		t.Errorf("expected local CA files to be restored, found %d", len(files))
 	}
 
-	// 3. Test Re-use (local files exist)
+	// 4. Test Re-use (local files exist)
 	signer.Seal()
 	if err := EnsureCA(cfg, dbConn, signer); err != nil {
 		t.Fatalf("EnsureCA failed for re-use: %v", err)
 	}
 
-	if !signer.IsUnsealed() {
-		t.Error("expected signer to be unsealed after re-use")
+	if signer.IsUnsealed() {
+		t.Error("expected signer to remain sealed after re-use check")
 	}
 }

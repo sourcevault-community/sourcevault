@@ -41,8 +41,11 @@ import (
 	"sourcevault/internal/registry"
 )
 
-// EnsureCA guarantees that a valid CA keypair exists on the local system and
-// is correctly reflected in the system registry and database cache.
+// EnsureCA guarantees that the local system is in sync with the authoritative
+// CA defined in the registry.
+// 1. If an active CA exists in the registry, it ensures local files match.
+// 2. It DOES NOT force-create a CA if missing (manual initialization required).
+// 3. It DOES NOT automatically unseal the signer.
 func EnsureCA(cfg *config.Config, dbConn *sql.DB, signer *CASigner) error {
 	caDir := filepath.Join(cfg.RootDir, "data", "ca")
 	if err := os.MkdirAll(caDir, 0700); err != nil {
@@ -65,29 +68,18 @@ func EnsureCA(cfg *config.Config, dbConn *sql.DB, signer *CASigner) error {
 			slog.Warn("Failed to sync CA metadata to database cache", "uuid", activeMeta.UUID, "error", err)
 		}
 
-		// Case A: Local files already exist.
-		if _, err := os.Stat(localPrivPath); err == nil {
-			slog.Debug("Local CA files found", "uuid", activeMeta.UUID)
-		} else {
-			// Case B: Local files missing — restore from registry.
+		// If local files are missing, restore them from registry so the node is "ready" to be unsealed.
+		if _, err := os.Stat(localPrivPath); os.IsNotExist(err) {
 			slog.Info("Local CA missing, restoring from registry", "uuid", activeMeta.UUID)
 			if err := restoreCA(activeMeta, localPrivPath, localPubPath); err != nil {
 				return fmt.Errorf("restoring CA from registry: %w", err)
 			}
 		}
-
-		// Attempt automatic unseal if passphrase is available.
-		if cfg.CA.Passphrase != "" {
-			if err := signer.UnsealFromPath(localPrivPath, []byte(cfg.CA.Passphrase)); err != nil {
-				slog.Warn("Failed to auto-unseal CA with provided passphrase", "error", err)
-			}
-		}
-		return nil
+	} else {
+		slog.Info("No active CA found in registry. System is in uninitialized state.")
 	}
 
-	// Step 2: No active CA in registry.
-	slog.Info("No active CA found in registry or system. Force-creating new CA.")
-	return ForceCreateCA(cfg, dbConn, signer)
+	return nil
 }
 
 // ForceCreateCA generates a new CA keypair, saves it locally, uploads it to the
