@@ -23,112 +23,73 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.                                                                //
 // ===================================================================================================================================== //
 
-package main
+// Package crypto provides cryptographic primitives for the SourceVault CA system.
+// This file handles SSH CA keypair generation.
+package crypto
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/rsa"
+	"encoding/pem"
 	"fmt"
-	"strings"
+	"log/slog"
 
-	"github.com/charmbracelet/lipgloss"
-	"github.com/spf13/cobra"
-
-	"sourcevault/internal/config"
-	"sourcevault/internal/crypto"
-	sv_log "sourcevault/internal/log"
+	"golang.org/x/crypto/ssh"
 )
 
-// banner is the ASCII art visual identity displayed when the application starts.
-const banner = `
-===========================================================================
- ####   ####  #    # #####   ####  ###### #    #   ##   #    # #      #####
-#      #    # #    # #    # #    # #      #    #  #  #  #    # #        #
- ####  #    # #    # #    # #      #####  #    # #    # #    # #        #
-     # #    # #    # #####  #      #      #    # ###### #    # #        #
-#    # #    # #    # #   #  #    # #       #  #  #    # #    # #        #
- ####   ####   ####  #    #  ####  ######   ##   #    #  ####  ######   #
-===========================================================================
-`
+// GenerateCAKey creates a new SSH CA private/public keypair.
+// keyType must be "ed25519" (recommended) or "rsa". rsaBits is used only for RSA keys.
+// The private key is encrypted using the provided passphrase in the modern OpenSSH format.
+// Both the key type and RSA bit size are validated against the active crypto policy
+// before generation proceeds.
+func GenerateCAKey(keyType string, rsaBits int, passphrase []byte) (privPEM []byte, pubAuthorizedKey []byte, err error) {
+	// Validate against the active crypto policy (currently a no-op stub; see SV-010).
+	if err := ValidateKeyType(keyType); err != nil {
+		return nil, nil, fmt.Errorf("crypto policy violation: %w", err)
+	}
 
-var (
-	subheadingStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#7D56F4")).
-			MarginTop(1)
+	var privateKey interface{}
+	var publicKey ssh.PublicKey
 
-	commandStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#04B575")).
-			Bold(true).
-			Width(12)
-
-	descStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#A9A9A9"))
-
-	listStyle = lipgloss.NewStyle().
-			MarginLeft(2).
-			MarginBottom(1)
-)
-
-var (
-	appCfg   *config.Config
-	closeLog func()
-	// appSigner is the shared in-memory CA signer injected into the ca subcommands
-	// and the SSH server. The zero value is a valid, sealed signer.
-	appSigner = &crypto.CASigner{}
-)
-
-var rootCmd = &cobra.Command{
-	Use:   "sourcevault",
-	Short: "SourceVault: The Federated Code Collaboration Platform",
-	Long:  banner + "\nSourceVault is an open-source decentralized Git hosting platform.",
-	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		// Do not initialize heavy resources if just calling help
-		if cmd.Name() == "help" {
-			return nil
+	switch keyType {
+	case "ed25519":
+		slog.Debug("Generating Ed25519 CA keypair")
+		pub, priv, err2 := ed25519.GenerateKey(rand.Reader)
+		if err2 != nil {
+			return nil, nil, fmt.Errorf("generating Ed25519 key: %w", err2)
 		}
+		privateKey = priv
+		publicKey, err = ssh.NewPublicKey(pub)
 
-		cfg, err := config.Load()
-		if err != nil {
-			return fmt.Errorf("loading configuration: %w", err)
+	case "rsa":
+		// Validate RSA bit size against policy before proceeding.
+		if err := ValidateBits(rsaBits); err != nil {
+			return nil, nil, fmt.Errorf("crypto policy violation: %w", err)
 		}
-		appCfg = cfg
-		closeLog = sv_log.Init(cfg)
-
-		return nil
-	},
-	PersistentPostRun: func(cmd *cobra.Command, args []string) {
-		if closeLog != nil {
-			closeLog()
+		slog.Debug("Generating RSA CA keypair", "bits", rsaBits)
+		priv, err2 := rsa.GenerateKey(rand.Reader, rsaBits)
+		if err2 != nil {
+			return nil, nil, fmt.Errorf("generating RSA-%d key: %w", rsaBits, err2)
 		}
-	},
-}
+		privateKey = priv
+		publicKey, err = ssh.NewPublicKey(&priv.PublicKey)
 
-func init() {
-	// Register subcommands.
-	rootCmd.AddCommand(caCmd)
+	default:
+		return nil, nil, fmt.Errorf("unsupported key type %q: must be \"ed25519\" or \"rsa\"", keyType)
+	}
 
-	// Override the default Help function to retain the custom Lipgloss styling.
-	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
-		fmt.Fprint(cmd.OutOrStdout(), cmd.Long)
-		fmt.Fprint(cmd.OutOrStdout(), "\n\n")
+	if err != nil {
+		return nil, nil, fmt.Errorf("creating SSH public key: %w", err)
+	}
 
-		fmt.Fprintln(cmd.OutOrStdout(), subheadingStyle.Render("Usage:"))
-		fmt.Fprintln(cmd.OutOrStdout(), listStyle.Render(cmd.UseLine()))
+	// Encrypt the private key with the passphrase using the modern OpenSSH KDF format.
+	privBlock, err := ssh.MarshalPrivateKeyWithPassphrase(privateKey, "SourceVault CA", passphrase)
+	if err != nil {
+		return nil, nil, fmt.Errorf("encrypting CA private key: %w", err)
+	}
 
-		if cmd.HasAvailableSubCommands() {
-			fmt.Fprintln(cmd.OutOrStdout(), subheadingStyle.Render("Available Commands:"))
-			var sb strings.Builder
-			for _, subCmd := range cmd.Commands() {
-				if subCmd.IsAvailableCommand() || subCmd.Name() == "help" {
-					sb.WriteString(commandStyle.Render(subCmd.Name()))
-					sb.WriteString(descStyle.Render(subCmd.Short))
-					sb.WriteString("\n")
-				}
-			}
-			fmt.Fprint(cmd.OutOrStdout(), listStyle.Render(sb.String()))
-		}
-
-		if cmd.HasAvailableLocalFlags() {
-			fmt.Fprintln(cmd.OutOrStdout(), subheadingStyle.Render("Flags:"))
-			fmt.Fprintln(cmd.OutOrStdout(), listStyle.Render(cmd.LocalFlags().FlagUsages()))
-		}
-	})
+	privPEM = pem.EncodeToMemory(privBlock)
+	pubAuthorizedKey = ssh.MarshalAuthorizedKey(publicKey)
+	return privPEM, pubAuthorizedKey, nil
 }

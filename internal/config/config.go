@@ -46,6 +46,14 @@ type Config struct {
 	Metrics  MetricsConfig  // Metrics contains configuration for the dedicated Prometheus metrics server.
 	Database DatabaseConfig // Database contains settings for the application's persistence layer.
 	Registry RegistryConfig // Registry contains settings for the Git-based system registry.
+	CA       CAConfig       // CA contains settings for the local Certificate Authority.
+}
+
+// CAConfig holds settings for the local SSH Certificate Authority.
+type CAConfig struct {
+	DefaultKeyType   string // DefaultKeyType is the algorithm used when creating a CA ("ed25519" or "rsa"). Default: "ed25519".
+	DefaultRSABits   int    // DefaultRSABits is the RSA key size when DefaultKeyType is "rsa". Default: 4096.
+	DefaultValidDays int    // DefaultValidDays is the default certificate validity period in days. Default: 365.
 }
 
 // RegistryConfig holds settings for the Git-based system registry.
@@ -129,6 +137,11 @@ func Load() (*Config, error) {
 		Registry: RegistryConfig{
 			Branch: "main",
 		},
+		CA: CAConfig{
+			DefaultKeyType:   "ed25519",
+			DefaultRSABits:   4096,
+			DefaultValidDays: 365,
+		},
 	}
 
 	// Override global settings from environment variables if they are defined.
@@ -153,6 +166,21 @@ func Load() (*Config, error) {
 	// Override Registry settings.
 	if val := os.Getenv("SOURCEVAULT_REGISTRY_BRANCH"); val != "" {
 		c.Registry.Branch = val
+	}
+
+	// Override CA settings.
+	if val := os.Getenv("SOURCEVAULT_CA_KEY_TYPE"); val != "" {
+		c.CA.DefaultKeyType = val
+	}
+	if val := os.Getenv("SOURCEVAULT_CA_RSA_BITS"); val != "" {
+		if bits, err := strconv.Atoi(val); err == nil {
+			c.CA.DefaultRSABits = bits
+		}
+	}
+	if val := os.Getenv("SOURCEVAULT_CA_VALID_DAYS"); val != "" {
+		if days, err := strconv.Atoi(val); err == nil {
+			c.CA.DefaultValidDays = days
+		}
 	}
 
 	// Override Web server settings from environment variables if they are defined.
