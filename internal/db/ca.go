@@ -36,17 +36,18 @@ import (
 
 // CA models the database representation of a Certificate Authority.
 type CA struct {
-	UUID        string
-	Name        string
-	Algorithm   string
-	Fingerprint string
-	PublicKey   string
-	IsActive    bool
-	Revoked     bool
-	RevokedAt   sql.NullTime
-	CreatedAt   time.Time
-	ValidFrom   time.Time
-	ValidUntil  time.Time
+	UUID                string
+	Name                string
+	Algorithm           string
+	Fingerprint         string
+	PublicKey           string
+	EncryptedPrivateKey string
+	IsActive            bool
+	Revoked             bool
+	RevokedAt           sql.NullTime
+	CreatedAt           time.Time
+	ValidFrom           time.Time
+	ValidUntil          time.Time
 }
 
 // UpsertCA inserts or updates a CA's metadata in the database cache.
@@ -55,8 +56,8 @@ func UpsertCA(db *sql.DB, meta registry.CAMetadata, isActive bool) error {
 
 	query := `
 		INSERT INTO certificate_authorities (
-			uuid, name, algorithm, fingerprint, public_key, is_active, revoked, revoked_at, created_at, valid_from, valid_until
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			uuid, name, algorithm, fingerprint, public_key, encrypted_private_key, is_active, revoked, revoked_at, created_at, valid_from, valid_until
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(uuid) DO UPDATE SET
 			name = excluded.name,
 			is_active = excluded.is_active,
@@ -70,6 +71,7 @@ func UpsertCA(db *sql.DB, meta registry.CAMetadata, isActive bool) error {
 		meta.Algorithm,
 		meta.Fingerprint,
 		meta.PublicKey,
+		meta.EncryptedPrivateKey,
 		isActive,
 		meta.Revoked,
 		meta.RevokedAt,
@@ -94,7 +96,7 @@ func UpsertCA(db *sql.DB, meta registry.CAMetadata, isActive bool) error {
 
 // GetCAByUUID retrieves a single CA's metadata from the database cache.
 func GetCAByUUID(db *sql.DB, uuid string) (*registry.CAMetadata, error) {
-	query := `SELECT uuid, name, algorithm, fingerprint, public_key, revoked, revoked_at, created_at, valid_from, valid_until 
+	query := `SELECT uuid, name, algorithm, fingerprint, public_key, encrypted_private_key, revoked, revoked_at, created_at, valid_from, valid_until 
 	          FROM certificate_authorities WHERE uuid = ?`
 	
 	var meta registry.CAMetadata
@@ -104,6 +106,7 @@ func GetCAByUUID(db *sql.DB, uuid string) (*registry.CAMetadata, error) {
 		&meta.Algorithm,
 		&meta.Fingerprint,
 		&meta.PublicKey,
+		&meta.EncryptedPrivateKey,
 		&meta.Revoked,
 		&meta.RevokedAt,
 		&meta.CreatedAt,

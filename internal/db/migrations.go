@@ -130,6 +130,7 @@ func getMigrations(driver string) []string {
 				algorithm TEXT NOT NULL,
 				fingerprint TEXT NOT NULL,
 				public_key TEXT NOT NULL,
+				encrypted_private_key TEXT NOT NULL,
 				is_active BOOLEAN DEFAULT 0,
 				revoked BOOLEAN DEFAULT 0,
 				revoked_at DATETIME,
