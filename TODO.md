@@ -78,19 +78,25 @@ registry/
 > This milestone provides the cryptographic foundation the SSH server depends on.
 
 ### [SV-004] Implement Local CA Management
-**Status**: `[ ]` Pending
+**Status**: `[~]` Testing
 **Context / Files**:
-- `cmd/sourcevault/ca.go` (new)
-- `internal/crypto` (new)
-- `internal/config/config.go`
+- `cmd/sourcevault/ca.go`
+- `internal/crypto` (new files: `bootstrap.go`, `ca.go`, `signer.go`, `krl.go`)
+- `internal/registry/sync.go` (extended)
+- `internal/db/ca.go` (new)
 **Acceptance Criteria**:
-1. Create a `sourcevault ca` subcommand with nested commands: `create`, `rotate`, `revoke`, `unseal`, and `seal`.
-2. Implement key generation supporting **both** Ed25519 (default) and RSA-4096 (with SHA-256/SHA-512). Key type and parameters must respect the active Crypto Policy (SV-010).
-3. Save public/private keypairs encrypted with a passphrase using `ssh.MarshalPrivateKeyWithPassphrase`. Store in `RootDir/data/ca/`.
-4. Implement an "Unseal" mechanism where the decrypted `ssh.Signer` is held in a thread-safe memory structure (`sync.RWMutex`), allowing certificate signing without repeated passphrase prompts.
-5. Provide an internal API/interface for the in-memory signer, used by the SSH server (SV-002) to issue signed certificates.
-6. Support configurable **validity periods** for issued CA certificates (e.g. `--valid-for 8760h` or `--expires 2027-01-01`). Default validity and maximum allowed validity must be enforced by Crypto Policy (SV-010).
-7. Write CA public key metadata (fingerprint, algorithm, validity period, creation date) to `registry/worktree/CertificateAuthority/{uuid}.yaml`. Private key material must never touch the registry.
+1. Create a `sourcevault ca` subcommand with nested commands: `create`, `rotate`, `revoke`, `unseal`, `seal`, `status`, and `sign`.
+2. Implement key generation supporting **both** Ed25519 (default) and RSA-4096. Key type and parameters respect the active Crypto Policy (SV-010).
+3. Save encrypted public/private keypairs locally in `RootDir/data/ca/` and backup metadata (including encrypted private key) to the system registry.
+4. Implement an **automatic bootstrap logic** during server startup:
+   - If local CA files exist, use them.
+   - If missing locally, restore from the registry's **active CA**.
+   - If no active CA exists anywhere, force-generate a new one and register it.
+5. Track the authoritative CA in the registry via `ActiveCA.yaml` to prevent regression.
+6. Support automatic "Unseal" on startup if `SOURCEVAULT_CA_PASSPHRASE` is provided in the environment.
+7. Implement **Database Caching**: cache all CA metadata (UUID, fingerprint, algorithm, status) in the SQLite database for fast querying.
+8. Implement `sourcevault ca sign [pubkey]` to issue signed SSH certificates using the unsealed CA.
+9. Implement KRL (Key Revocation List) generation for OpenSSH compatibility.
 
 ---
 

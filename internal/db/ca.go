@@ -29,118 +29,94 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
-	"strings"
+	"time"
+
+	"sourcevault/internal/registry"
 )
 
-// RunMigrations initializes the database schema.
-// It is dialect-aware to support different CREATE TABLE syntax across database engines.
-func RunMigrations(db *sql.DB, driver string) error {
-	driver = strings.ToLower(driver)
+// CA models the database representation of a Certificate Authority.
+type CA struct {
+	UUID        string
+	Name        string
+	Algorithm   string
+	Fingerprint string
+	PublicKey   string
+	IsActive    bool
+	Revoked     bool
+	RevokedAt   sql.NullTime
+	CreatedAt   time.Time
+	ValidFrom   time.Time
+	ValidUntil  time.Time
+}
 
-	// Ensure the schema_migrations table exists for all dialects.
-	if err := ensureMigrationsTable(db, driver); err != nil {
-		return err
-	}
+// UpsertCA inserts or updates a CA's metadata in the database cache.
+func UpsertCA(db *sql.DB, meta registry.CAMetadata, isActive bool) error {
+	slog.Debug("Caching CA metadata in database", "uuid", meta.UUID, "active", isActive)
 
-	// Fetch the currently applied version
-	var currentVersion int
-	err := db.QueryRow("SELECT COALESCE(MAX(version), 0) FROM schema_migrations").Scan(&currentVersion)
+	query := `
+		INSERT INTO certificate_authorities (
+			uuid, name, algorithm, fingerprint, public_key, is_active, revoked, revoked_at, created_at, valid_from, valid_until
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(uuid) DO UPDATE SET
+			name = excluded.name,
+			is_active = excluded.is_active,
+			revoked = excluded.revoked,
+			revoked_at = excluded.revoked_at
+	`
+
+	_, err := db.Exec(query,
+		meta.UUID,
+		meta.Name,
+		meta.Algorithm,
+		meta.Fingerprint,
+		meta.PublicKey,
+		isActive,
+		meta.Revoked,
+		meta.RevokedAt,
+		meta.CreatedAt,
+		meta.ValidFrom,
+		meta.ValidUntil,
+	)
+
 	if err != nil {
-		return fmt.Errorf("failed to fetch current migration version: %w", err)
+		return fmt.Errorf("upserting CA %s: %w", meta.UUID, err)
 	}
 
-	// Retrieve dialect-specific migrations
-	migrations := getMigrations(driver)
-	if len(migrations) == 0 {
-		slog.Debug("No migrations found for driver", "driver", driver)
-		return nil
-	}
-
-	// Apply pending migrations inside a transaction
-	for i, migrationSQL := range migrations {
-		version := i + 1
-		if version <= currentVersion {
-			continue // Already applied
-		}
-
-		slog.Info("Applying database migration", "version", version)
-
-		tx, err := db.Begin()
-		if err != nil {
-			return fmt.Errorf("beginning migration transaction: %w", err)
-		}
-
-		if _, err := tx.Exec(migrationSQL); err != nil {
-			tx.Rollback()
-			return fmt.Errorf("executing migration %d: %w", version, err)
-		}
-
-		// Record the applied migration
-		if _, err := tx.Exec("INSERT INTO schema_migrations (version) VALUES (?)", version); err != nil {
-			tx.Rollback()
-			return fmt.Errorf("recording migration %d: %w", version, err)
-		}
-
-		if err := tx.Commit(); err != nil {
-			return fmt.Errorf("committing migration %d: %w", version, err)
+	// If we just marked one as active, ensure all others are marked inactive
+	if isActive {
+		if _, err := db.Exec("UPDATE certificate_authorities SET is_active = 0 WHERE uuid != ?", meta.UUID); err != nil {
+			return fmt.Errorf("resetting other active CAs: %w", err)
 		}
 	}
 
-	slog.Info("Database migrations up to date")
 	return nil
 }
 
-func ensureMigrationsTable(db *sql.DB, driver string) error {
-	var query string
+// GetCAByUUID retrieves a single CA's metadata from the database cache.
+func GetCAByUUID(db *sql.DB, uuid string) (*registry.CAMetadata, error) {
+	query := `SELECT uuid, name, algorithm, fingerprint, public_key, revoked, revoked_at, created_at, valid_from, valid_until 
+	          FROM certificate_authorities WHERE uuid = ?`
+	
+	var meta registry.CAMetadata
+	err := db.QueryRow(query, uuid).Scan(
+		&meta.UUID,
+		&meta.Name,
+		&meta.Algorithm,
+		&meta.Fingerprint,
+		&meta.PublicKey,
+		&meta.Revoked,
+		&meta.RevokedAt,
+		&meta.CreatedAt,
+		&meta.ValidFrom,
+		&meta.ValidUntil,
+	)
 
-	switch driver {
-	case "sqlite3", "sqlite":
-		query = `CREATE TABLE IF NOT EXISTS schema_migrations (
-			version INTEGER PRIMARY KEY,
-			applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		);`
-	case "postgres", "postgresql":
-		query = `CREATE TABLE IF NOT EXISTS schema_migrations (
-			version SERIAL PRIMARY KEY,
-			applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		);`
-	default:
-		return fmt.Errorf("unsupported driver for schema migrations: %s", driver)
+	if err == sql.ErrNoRows {
+		return nil, nil
 	}
-
-	_, err := db.Exec(query)
 	if err != nil {
-		return fmt.Errorf("creating schema_migrations table: %w", err)
-	}
-	return nil
-}
-
-// getMigrations returns a sequential list of SQL statements to apply
-// for the given database driver.
-func getMigrations(driver string) []string {
-	var migrations []string
-
-	switch driver {
-	case "sqlite3", "sqlite":
-		migrations = []string{
-			// Version 1: Core System Tables
-			`CREATE TABLE IF NOT EXISTS certificate_authorities (
-				uuid TEXT PRIMARY KEY,
-				name TEXT NOT NULL,
-				algorithm TEXT NOT NULL,
-				fingerprint TEXT NOT NULL,
-				public_key TEXT NOT NULL,
-				is_active BOOLEAN DEFAULT 0,
-				revoked BOOLEAN DEFAULT 0,
-				revoked_at DATETIME,
-				created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-				valid_from DATETIME NOT NULL,
-				valid_until DATETIME NOT NULL
-			);`,
-		}
-	case "postgres", "postgresql":
-		migrations = []string{}
+		return nil, fmt.Errorf("querying CA %s: %w", uuid, err)
 	}
 
-	return migrations
+	return &meta, nil
 }

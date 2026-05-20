@@ -19,6 +19,8 @@ import (
 	"testing"
 
 	"sourcevault/internal/config"
+	"sourcevault/internal/db"
+	"sourcevault/internal/registry"
 )
 
 func TestEnsureCA(t *testing.T) {
@@ -56,11 +58,27 @@ func TestEnsureCA(t *testing.T) {
 			DefaultValidDays: 1,
 			Passphrase:       "test-passphrase",
 		},
+		Database: config.DatabaseConfig{
+			Driver: "sqlite3",
+			DSN:    filepath.Join(tmpDir, "test.db"),
+		},
 	}
+
+	// Initialize and Migrate DB
+	dbConn, err := db.Initialize(cfg)
+	if err != nil {
+		t.Fatalf("failed to initialize db: %v", err)
+	}
+	defer dbConn.Close()
+
+	if err := db.RunMigrations(dbConn, cfg.Database.Driver); err != nil {
+		t.Fatalf("failed to run migrations: %v", err)
+	}
+
 	signer := &CASigner{}
 
 	// 1. Test Force Creation (nothing exists)
-	if err := EnsureCA(cfg, signer); err != nil {
+	if err := EnsureCA(cfg, dbConn, signer); err != nil {
 		t.Fatalf("EnsureCA failed for force-create: %v", err)
 	}
 
@@ -68,7 +86,17 @@ func TestEnsureCA(t *testing.T) {
 		t.Error("expected signer to be unsealed after creation")
 	}
 
-	// Verify local files exist
+	// Verify DB cache exists
+	active, err := registry.GetActiveCA(cfg)
+	if err != nil || active == nil {
+		t.Fatalf("failed to get active CA for verification: %v", err)
+	}
+	dbMeta, err := db.GetCAByUUID(dbConn, active.UUID)
+	if err != nil || dbMeta == nil {
+		t.Errorf("CA metadata not found in database cache: %v", err)
+	}
+
+	// Let's verify by just listing local files for now.
 	localCaDir := filepath.Join(tmpDir, "data", "ca")
 	files, _ := os.ReadDir(localCaDir)
 	if len(files) < 2 { // uuid and uuid.pub
@@ -81,7 +109,7 @@ func TestEnsureCA(t *testing.T) {
 	os.MkdirAll(localCaDir, 0700)
 	signer.Seal()
 
-	if err := EnsureCA(cfg, signer); err != nil {
+	if err := EnsureCA(cfg, dbConn, signer); err != nil {
 		t.Fatalf("EnsureCA failed for restoration: %v", err)
 	}
 
@@ -96,7 +124,7 @@ func TestEnsureCA(t *testing.T) {
 
 	// 3. Test Re-use (local files exist)
 	signer.Seal()
-	if err := EnsureCA(cfg, signer); err != nil {
+	if err := EnsureCA(cfg, dbConn, signer); err != nil {
 		t.Fatalf("EnsureCA failed for re-use: %v", err)
 	}
 

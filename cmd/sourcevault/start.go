@@ -119,13 +119,6 @@ var startCmd = &cobra.Command{
 			return fmt.Errorf("ensuring registry: %w", err)
 		}
 
-		// Ensure a valid Certificate Authority (CA) exists for SSH certificate signing.
-		// If missing, it will attempt to restore from registry or force-create a new one.
-		if err := crypto.EnsureCA(cfg, appSigner); err != nil {
-			slog.Error("Failed to ensure Certificate Authority", "error", err)
-			return fmt.Errorf("ensuring CA: %w", err)
-		}
-
 		// Initialize Database Connection
 		dbConn, err := db.Initialize(cfg)
 		if err != nil {
@@ -138,6 +131,14 @@ var startCmd = &cobra.Command{
 		if err := db.RunMigrations(dbConn, cfg.Database.Driver); err != nil {
 			slog.Error("Failed to run database migrations", "error", err)
 			return fmt.Errorf("running migrations: %w", err)
+		}
+
+		// Ensure a valid Certificate Authority (CA) exists for SSH certificate signing.
+		// If missing, it will attempt to restore from registry or force-create a new one.
+		// This runs after registry sync and DB migration to ensure the CA can be cached.
+		if err := crypto.EnsureCA(cfg, dbConn, appSigner); err != nil {
+			slog.Error("Failed to ensure Certificate Authority", "error", err)
+			return fmt.Errorf("ensuring CA: %w", err)
 		}
 
 		// Use an errgroup to manage background services.

@@ -26,6 +26,7 @@
 package crypto
 
 import (
+	"database/sql"
 	"fmt"
 	"log/slog"
 	"os"
@@ -36,16 +37,13 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"sourcevault/internal/config"
+	"sourcevault/internal/db"
 	"sourcevault/internal/registry"
 )
 
 // EnsureCA guarantees that a valid CA keypair exists on the local system and
-// is correctly reflected in the system registry. It follows this priority:
-// 1. If local CA files exist, use them.
-// 2. If missing locally, attempt to restore from the registry's active CA.
-// 3. If no active CA exists in the registry, generate a new one and set it as active.
-// If a passphrase is provided in the config, it also attempts to unseal the signer.
-func EnsureCA(cfg *config.Config, signer *CASigner) error {
+// is correctly reflected in the system registry and database cache.
+func EnsureCA(cfg *config.Config, dbConn *sql.DB, signer *CASigner) error {
 	caDir := filepath.Join(cfg.RootDir, "data", "ca")
 	if err := os.MkdirAll(caDir, 0700); err != nil {
 		return fmt.Errorf("creating CA directory: %w", err)
@@ -61,6 +59,11 @@ func EnsureCA(cfg *config.Config, signer *CASigner) error {
 		slog.Debug("Found active CA in registry", "uuid", activeMeta.UUID)
 		localPrivPath := filepath.Join(caDir, activeMeta.UUID)
 		localPubPath := localPrivPath + ".pub"
+
+		// Ensure DB cache is up to date with registry
+		if err := db.UpsertCA(dbConn, *activeMeta, true); err != nil {
+			slog.Warn("Failed to sync CA metadata to database cache", "uuid", activeMeta.UUID, "error", err)
+		}
 
 		// Case A: Local files already exist.
 		if _, err := os.Stat(localPrivPath); err == nil {
@@ -83,24 +86,17 @@ func EnsureCA(cfg *config.Config, signer *CASigner) error {
 	}
 
 	// Step 2: No active CA in registry.
-	// Check if there are ANY local CA files (e.g. from an older version that didn't use the registry).
-	// For simplicity in this implementation, if registry is empty, we force-create a new one.
 	slog.Info("No active CA found in registry or system. Force-creating new CA.")
-	return ForceCreateCA(cfg, signer)
+	return ForceCreateCA(cfg, dbConn, signer)
 }
 
 // ForceCreateCA generates a new CA keypair, saves it locally, uploads it to the
-// registry, and marks it as the active CA.
-func ForceCreateCA(cfg *config.Config, signer *CASigner) error {
+// registry, caches it in the DB, and marks it as the active CA.
+func ForceCreateCA(cfg *config.Config, dbConn *sql.DB, signer *CASigner) error {
 	caDir := filepath.Join(cfg.RootDir, "data", "ca")
 	
 	passphrase := []byte(cfg.CA.Passphrase)
 	if len(passphrase) == 0 {
-		// We cannot force-create an encrypted CA without a passphrase.
-		// In automated mode, we fall back to a "system" default if not provided?
-		// User requirement says "force create one then and there".
-		// We'll use a random UUID as a temporary passphrase if none provided? 
-		// No, that's insecure. Let's assume the user MUST provide one in config for auto-creation.
 		return fmt.Errorf("cannot force-create CA: SOURCEVAULT_CA_PASSPHRASE is not set")
 	}
 
@@ -146,6 +142,11 @@ func ForceCreateCA(cfg *config.Config, signer *CASigner) error {
 
 	if err := registry.SetActiveCA(cfg, caUUID); err != nil {
 		return fmt.Errorf("setting active CA in registry: %w", err)
+	}
+
+	// Cache in DB
+	if err := db.UpsertCA(dbConn, meta, true); err != nil {
+		slog.Warn("Failed to cache new CA metadata in database", "uuid", caUUID, "error", err)
 	}
 
 	slog.Info("New CA created and registered", "uuid", caUUID, "fingerprint", fingerprint)
