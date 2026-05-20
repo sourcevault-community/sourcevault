@@ -107,17 +107,83 @@ registry/
 > CA infrastructure must be in place before SSH authentication is useful.
 > This milestone provides the cryptographic foundation the SSH server depends on.
 
-### [SV-004] Implement CA Subcommand
+### [SV-004] Implement Local CA Management
 **Status**: `[ ]` Pending
 **Context / Files**:
 - `cmd/sourcevault/ca.go` (new)
 - `internal/crypto` (new)
+- `internal/config/config.go`
 **Acceptance Criteria**:
 1. Create a `sourcevault ca` subcommand with nested commands: `create`, `rotate`, `revoke`, `unseal`, and `seal`.
-2. Implement key generation for SSH Certificate Authorities, supporting **both** Ed25519 (default) and RSA-4096 (with SHA-256/SHA-512 signatures) to ensure full FIPS compliance.
-3. Save public/private keypairs securely within the `RootDir`, encrypted with a passphrase using `ssh.MarshalPrivateKeyWithPassphrase`.
-4. Implement an "Unseal" mechanism (similar to HashiCorp Vault) where the decrypted `ssh.Signer` is temporarily held in a thread-safe memory structure (`sync.RWMutex`), allowing users to self-sign keys without providing the CA password repeatedly.
-5. Provide an RPC or internal API to interface with the in-memory signer.
+2. Implement key generation supporting **both** Ed25519 (default) and RSA-4096 (with SHA-256/SHA-512). Key type and parameters must respect the active Crypto Policy (SV-010).
+3. Save public/private keypairs encrypted with a passphrase using `ssh.MarshalPrivateKeyWithPassphrase`. Store in `RootDir/data/ca/`.
+4. Implement an "Unseal" mechanism where the decrypted `ssh.Signer` is held in a thread-safe memory structure (`sync.RWMutex`), allowing certificate signing without repeated passphrase prompts.
+5. Provide an internal API/interface for the in-memory signer, used by the SSH server (SV-002) to issue signed certificates.
+6. Support configurable **validity periods** for issued CA certificates (e.g. `--valid-for 8760h` or `--expires 2027-01-01`). Default validity and maximum allowed validity must be enforced by Crypto Policy (SV-010).
+7. Write CA public key metadata (fingerprint, algorithm, validity period, creation date) to `registry/worktree/CertificateAuthority/{uuid}.yaml`. Private key material must never touch the registry.
+
+---
+
+### [SV-008] Federated CA Trust (Decentralized Node Peering)
+**Status**: `[ ]` Pending
+**Context / Files**:
+- `cmd/sourcevault/ca.go` (extend)
+- `internal/crypto` (extend)
+- `internal/registry/sync.go`
+- `internal/config/config.go`
+**Background**:
+For decentralized deployments, multiple SourceVault nodes need to mutually trust each other's CAs so that a user certificate issued by Node A is accepted by Node B. SSH Certificates are **required** for decentralized hosts — plain key auth is not accepted between federated nodes.
+
+**Acceptance Criteria**:
+1. Add `sourcevault ca import` subcommand to import a foreign CA's public key from a file or URL.
+2. Add `sourcevault ca trust` / `sourcevault ca revoke-trust` to manage the trusted-CA list.
+3. Store trusted foreign CA public keys in `registry/worktree/CertificateAuthority/trusted/{uuid}.yaml`, including origin node identifier, fingerprint, algorithm, and import date.
+4. On startup, the SSH server (SV-002) must load all trusted CA public keys so it can validate certificates issued by any trusted node.
+5. Ensure revoked CAs are immediately rejected — the in-memory trusted CA list must be reloadable without restart.
+
+---
+
+### [SV-009] SSH Key Trust Management (Non-Certificate Auth)
+**Status**: `[ ]` Pending
+**Context / Files**:
+- `cmd/sourcevault/key.go` (new)
+- `internal/db/users.go` (extend)
+- `internal/registry/sync.go`
+**Background**:
+Users who are not part of a decentralized setup, or who prefer not to use SSH certificates, may authenticate with a plain trusted SSH public key. This is the fallback/standalone auth method.
+
+**Acceptance Criteria**:
+1. Add a `sourcevault key` subcommand with: `add`, `list`, `revoke`.
+2. Trusted public keys are stored per-user in the database and written to `registry/worktree/Users/{uuid}.yaml` as a `trusted_keys` list (fingerprints + full public key).
+3. Support configurable **expiration** for trusted keys (e.g. `--valid-for 8760h` or `--expires 2027-01-01`). Expired keys are automatically rejected by the SSH server at auth time.
+4. The SSH server (SV-002) must consult the trusted key store at auth time, rejecting expired or revoked keys.
+5. Plain SSH key auth must be **disabled** for any user connecting from a federated/decentralized node — those connections require a valid SSH certificate from a trusted CA.
+
+---
+
+### [SV-010] Crypto Policy Configuration (FIPS & Cipher Control)
+**Status**: `[ ]` Pending
+**Context / Files**:
+- `internal/config/config.go`
+- `internal/crypto` (new or extend)
+- `sourcevault.env.sample`
+**Background**:
+Operators on FIPS-compliant infrastructure must be able to restrict the allowed cryptographic primitives. This policy is enforced globally — any CA creation, key import, or SSH negotiation that violates the policy is rejected.
+
+**Acceptance Criteria**:
+1. Add a `CryptoPolicy` block to `config.go` with the following fields:
+   - `AllowedKeyTypes []string` (e.g. `["rsa", "ed25519"]`; FIPS mode: `["rsa"]`)
+   - `MinRSABits int` (default: `3072`; FIPS minimum: `4096`)
+   - `AllowedMACs []string` (allowed SSH MAC algorithms)
+   - `AllowedCiphers []string` (allowed SSH symmetric ciphers)
+   - `AllowedKEX []string` (allowed key exchange algorithms)
+   - `MaxCAValidityDays int` (maximum CA certificate validity in days)
+   - `MaxKeyValidityDays int` (maximum user key validity in days)
+   - `FIPSMode bool` (shorthand: sets all of the above to FIPS-compliant values)
+2. Expose all fields via `SOURCEVAULT_CRYPTO_*` environment variables.
+3. Implement a `crypto.ValidatePolicy(cfg)` function called at startup that returns an error if the configured policy is self-contradictory (e.g. `FIPSMode=true` but `AllowedKeyTypes` includes `ed25519`).
+4. The SSH server (SV-002) must pass the allowed ciphers/MACs/KEX lists to the `ssh.ServerConfig` during negotiation.
+5. CA creation (SV-004) and key import (SV-009) must validate the requested key type and parameters against the active policy before proceeding.
 
 ---
 
