@@ -124,6 +124,9 @@ func SetActiveCA(cfg *config.Config, uuid string) error {
 	if err := gitCommit(worktree, "feat(ca): set active CA to "+uuid); err != nil {
 		return fmt.Errorf("committing ActiveCA update: %w", err)
 	}
+	if err := gitPush(worktree); err != nil {
+		return fmt.Errorf("pushing ActiveCA update: %w", err)
+	}
 
 	return nil
 }
@@ -152,6 +155,9 @@ func SaveCAMetadata(cfg *config.Config, meta CAMetadata) error {
 	}
 	if err := gitCommit(worktree, "feat(ca): add CA "+meta.UUID+" to registry"); err != nil {
 		return fmt.Errorf("committing CA metadata: %w", err)
+	}
+	if err := gitPush(worktree); err != nil {
+		return fmt.Errorf("pushing CA metadata: %w", err)
 	}
 
 	slog.Info("CA metadata committed to registry", "uuid", meta.UUID)
@@ -193,6 +199,9 @@ func RevokeCAMetadata(cfg *config.Config, uuid string) error {
 	}
 	if err := gitCommit(worktree, "feat(ca): revoke CA "+uuid); err != nil {
 		return fmt.Errorf("committing CA revocation: %w", err)
+	}
+	if err := gitPush(worktree); err != nil {
+		return fmt.Errorf("pushing CA revocation: %w", err)
 	}
 
 	slog.Info("CA revoked in registry", "uuid", uuid)

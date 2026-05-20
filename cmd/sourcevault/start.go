@@ -41,6 +41,7 @@ import (
 	"sourcevault/internal/crypto"
 	"sourcevault/internal/db"
 	"sourcevault/internal/metrics"
+	"sourcevault/internal/rpc"
 	"sourcevault/internal/registry"
 	"sourcevault/internal/version"
 	sv_web "sourcevault/internal/web"
@@ -156,6 +157,13 @@ var startCmd = &cobra.Command{
 
 		// Use an errgroup to manage background services.
 		g, ctx := errgroup.WithContext(ctx)
+
+		// Start the SourceVault RPC server for IPC (CLI communication).
+		// This is required for 'ca status', 'unseal', etc. to talk to the running server.
+		if err := rpc.StartServer(ctx, cfg.Sockets.SourceVault, appSigner); err != nil {
+			slog.Error("Failed to start RPC server", "error", err)
+			return fmt.Errorf("starting RPC server: %w", err)
+		}
 
 		// Start the Prometheus metrics collector in the background.
 		metrics.StartCollector(ctx, cfg.RootDir)

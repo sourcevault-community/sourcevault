@@ -47,6 +47,15 @@ func TestEnsureCA(t *testing.T) {
 	}
 
 	runCmd(worktree, "init")
+	// Create initial commit and push to set upstream
+	if err := os.WriteFile(filepath.Join(worktree, "README"), []byte("test"), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+	runCmd(worktree, "add", "README")
+	runCmd(worktree, "commit", "-m", "initial")
+	runCmd(worktree, "remote", "add", "origin", worktree)
+	runCmd(worktree, "push", "--set-upstream", "origin", "main")
+
 	runCmd(worktree, "config", "user.email", "test@example.com")
 	runCmd(worktree, "config", "user.name", "Test User")
 

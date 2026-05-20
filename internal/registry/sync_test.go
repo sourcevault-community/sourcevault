@@ -53,6 +53,17 @@ func TestCAMetadataSync(t *testing.T) {
 	if err := runGit(worktree, "init"); err != nil {
 		t.Fatalf("git init failed: %v", err)
 	}
+	// Create an initial commit so we can push and set upstream
+	if err := os.WriteFile(filepath.Join(worktree, "README"), []byte("test"), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+	runGit(worktree, "add", "README")
+	runGit(worktree, "commit", "-m", "initial")
+
+	// Setup a fake remote (the worktree itself for simplicity in testing)
+	runGit(worktree, "remote", "add", "origin", worktree)
+	runGit(worktree, "push", "--set-upstream", "origin", "main")
+
 	if err := gitConfigSet(worktree, "user.email", "test@example.com"); err != nil {
 		t.Fatalf("git config user.email failed: %v", err)
 	}

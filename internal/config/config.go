@@ -47,6 +47,12 @@ type Config struct {
 	Database DatabaseConfig // Database contains settings for the application's persistence layer.
 	Registry RegistryConfig // Registry contains settings for the Git-based system registry.
 	CA       CAConfig       // CA contains settings for the local Certificate Authority.
+	Sockets  SocketsConfig  // Sockets contains paths for Unix Domain Sockets used for IPC.
+}
+
+// SocketsConfig holds paths for Unix Domain Sockets.
+type SocketsConfig struct {
+	SourceVault string // SourceVault is the path to the main application IPC socket.
 }
 
 // CAConfig holds settings for the local SSH Certificate Authority.
@@ -142,6 +148,9 @@ func Load() (*Config, error) {
 			DefaultKeyType:   "ed25519",
 			DefaultRSABits:   4096,
 			DefaultValidDays: 365,
+		},
+		Sockets: SocketsConfig{
+			SourceVault: "data/sourcevault.sock",
 		},
 	}
 
@@ -267,11 +276,20 @@ func (c *Config) sanitize() {
 			c.Database.DSN = filepath.Join(c.RootDir, c.Database.DSN)
 		}
 
-		// Ensure the resulting path is absolutely resolved
 		if !strings.HasPrefix(c.Database.DSN, "file:") {
 			if abs, err := filepath.Abs(c.Database.DSN); err == nil {
 				c.Database.DSN = abs
 			}
+		}
+	}
+
+	// Sanitize socket paths
+	if c.Sockets.SourceVault != "" {
+		if !filepath.IsAbs(c.Sockets.SourceVault) {
+			c.Sockets.SourceVault = filepath.Join(c.RootDir, c.Sockets.SourceVault)
+		}
+		if abs, err := filepath.Abs(c.Sockets.SourceVault); err == nil {
+			c.Sockets.SourceVault = abs
 		}
 	}
 }

@@ -84,6 +84,11 @@ func gitCommit(worktree, message string) error {
 	return runGit(worktree, "commit", "--allow-empty", "-m", message)
 }
 
+// gitPush pushes the current branch to the origin remote.
+func gitPush(worktree string) error {
+	return runGit(worktree, "push", "origin")
+}
+
 // gitPushSetUpstream pushes the local branch to the remote and sets it as the
 // upstream tracking branch. Required for the first push on a newly created branch.
 func gitPushSetUpstream(worktree, remote, branch string) error {
