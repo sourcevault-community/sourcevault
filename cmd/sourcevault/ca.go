@@ -11,8 +11,8 @@
 // ===================================================================================================================================== //
 
 package main
-
 import (
+	"bufio"
 	"fmt"
 	"log/slog"
 	"os"
@@ -275,6 +275,7 @@ var caSignCmd = &cobra.Command{
 		var pubKeyBytes []byte
 		var inputIsFile bool
 		var pubKeyPath string
+		scanner := bufio.NewScanner(os.Stdin)
 
 		// Step 1: Obtain the target public key.
 		if len(args) > 0 {
@@ -288,29 +289,37 @@ var caSignCmd = &cobra.Command{
 		} else {
 			// Prompt for the public key data if no file is provided.
 			fmt.Print("Paste the public key you wish to sign: ")
-			var input string
-			fmt.Scanln(&input) // This might be too simple for long SSH keys. 
-			// Let's use a more robust way to read the line.
-			// However, for brevity and following the prompt instruction:
-			pubKeyBytes = []byte(strings.TrimSpace(input))
+			if scanner.Scan() {
+				pubKeyBytes = []byte(strings.TrimSpace(scanner.Text()))
+			}
+			if err := scanner.Err(); err != nil {
+				return fmt.Errorf("reading public key input: %w", err)
+			}
+		}
+
+		if len(pubKeyBytes) == 0 {
+			return fmt.Errorf("no public key provided")
 		}
 
 		// Step 2: Gather certificate metadata (Identity and Principals).
 		keyID, _ := cmd.Flags().GetString("id")
 		if keyID == "" && term.IsTerminal(int(os.Stdin.Fd())) {
 			fmt.Print("Enter Key ID (identity): ")
-			fmt.Scanln(&keyID)
+			if scanner.Scan() {
+				keyID = strings.TrimSpace(scanner.Text())
+			}
 		}
 
 		principals, _ := cmd.Flags().GetStringSlice("principals")
 		if len(principals) == 0 && term.IsTerminal(int(os.Stdin.Fd())) {
 			fmt.Print("Enter Principals (comma separated, optional): ")
-			var pInput string
-			fmt.Scanln(&pInput)
-			if pInput != "" {
-				principals = strings.Split(pInput, ",")
-				for i := range principals {
-					principals[i] = strings.TrimSpace(principals[i])
+			if scanner.Scan() {
+				pInput := strings.TrimSpace(scanner.Text())
+				if pInput != "" {
+					principals = strings.Split(pInput, ",")
+					for i := range principals {
+						principals[i] = strings.TrimSpace(principals[i])
+					}
 				}
 			}
 		}
