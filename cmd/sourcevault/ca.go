@@ -55,6 +55,25 @@ var caCreateCmd = &cobra.Command{
 			return fmt.Errorf("running database migrations: %w", err)
 		}
 
+		keyType, _ := cmd.Flags().GetString("key-type")
+		rsaBits, _ := cmd.Flags().GetInt("rsa-bits")
+		validForStr, _ := cmd.Flags().GetString("valid-for")
+		name, _ := cmd.Flags().GetString("name")
+
+		if keyType != "" {
+			appCfg.CA.DefaultKeyType = keyType
+		}
+		if rsaBits != 0 {
+			appCfg.CA.DefaultRSABits = rsaBits
+		}
+		if validForStr != "" {
+			d, err := crypto.ParseHumanDuration(validForStr)
+			if err != nil {
+				return fmt.Errorf("invalid validity period %q: %w", validForStr, err)
+			}
+			appCfg.CA.DefaultValidDays = int(d.Hours() / 24)
+		}
+
 		// Prompt for passphrase with confirmation.
 		passphrase, err := promptPassphrase("Enter passphrase to encrypt CA private key: ")
 		if err != nil {
@@ -72,8 +91,7 @@ var caCreateCmd = &cobra.Command{
 		appCfg.CA.Passphrase = string(passphrase)
 
 		// Delegate creation logic to the crypto bootstrap module.
-		// This handles key generation, registry backup, and database caching.
-		if err := crypto.ForceCreateCA(appCfg, dbConn, appSigner); err != nil {
+		if err := crypto.ForceCreateCA(appCfg, dbConn, appSigner, name); err != nil {
 			return fmt.Errorf("force-creating CA: %w", err)
 		}
 
@@ -298,7 +316,7 @@ var caSignCmd = &cobra.Command{
 		}
 
 		certTypeStr, _ := cmd.Flags().GetString("type")
-		validFor, _ := cmd.Flags().GetDuration("valid-for")
+		validForStr, _ := cmd.Flags().GetString("valid-for")
 
 		var certType uint32
 		switch certTypeStr {
@@ -310,7 +328,14 @@ var caSignCmd = &cobra.Command{
 			return fmt.Errorf("invalid certificate type %q: must be \"user\" or \"host\"", certTypeStr)
 		}
 
-		if validFor == 0 {
+		var validFor time.Duration
+		if validForStr != "" {
+			var err error
+			validFor, err = crypto.ParseHumanDuration(validForStr)
+			if err != nil {
+				return fmt.Errorf("invalid validity period %q: %w", validForStr, err)
+			}
+		} else {
 			validFor = time.Duration(appCfg.CA.DefaultValidDays) * 24 * time.Hour
 		}
 
@@ -409,7 +434,7 @@ func init() {
 	// ca create flags
 	caCreateCmd.Flags().String("key-type", "", "Key algorithm: ed25519 or rsa (default from config)")
 	caCreateCmd.Flags().Int("rsa-bits", 0, "RSA key size in bits (default from config, only used with --key-type=rsa)")
-	caCreateCmd.Flags().Duration("valid-for", 0, "Certificate validity period e.g. 8760h (default from config)")
+	caCreateCmd.Flags().String("valid-for", "", "Certificate validity period e.g. 1y, 2M, 30d, 12h (default from config)")
 	caCreateCmd.Flags().String("name", "", "Human-readable label for this CA")
 
 	// ca revoke flags
@@ -419,14 +444,14 @@ func init() {
 	caRotateCmd.Flags().String("revoke-uuid", "", "UUID of the CA being replaced")
 	caRotateCmd.Flags().String("key-type", "", "Key algorithm for the new CA")
 	caRotateCmd.Flags().Int("rsa-bits", 0, "RSA key size for the new CA")
-	caRotateCmd.Flags().Duration("valid-for", 0, "Validity period for the new CA")
+	caRotateCmd.Flags().String("valid-for", "", "Validity period for the new CA e.g. 1y")
 	caRotateCmd.Flags().String("name", "", "Name for the new CA")
 
 	// ca sign flags
 	caSignCmd.Flags().String("type", "user", "Certificate type: user or host")
 	caSignCmd.Flags().String("id", "", "Key ID (comment) to embed in the certificate")
 	caSignCmd.Flags().StringSlice("principals", nil, "List of valid principals (comma separated)")
-	caSignCmd.Flags().Duration("valid-for", 0, "Certificate validity period e.g. 24h (default from config)")
+	caSignCmd.Flags().String("valid-for", "", "Certificate validity period e.g. 1y, 2M, 30d, 12h (default from config)")
 
 	// Register all subcommands under caCmd.
 	caCmd.AddCommand(caCreateCmd, caUnsealCmd, caSealCmd, caStatusCmd, caRevokeCmd, caRotateCmd, caSignCmd)

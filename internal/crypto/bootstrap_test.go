@@ -94,7 +94,7 @@ func TestEnsureCA(t *testing.T) {
 	}
 
 	// 2. Test Explicit Force Creation (manual step)
-	if err := ForceCreateCA(cfg, dbConn, signer); err != nil {
+	if err := ForceCreateCA(cfg, dbConn, signer, "Test CA"); err != nil {
 		t.Fatalf("ForceCreateCA failed: %v", err)
 	}
 

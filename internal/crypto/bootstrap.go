@@ -106,7 +106,7 @@ func EnsureCA(cfg *config.Config, dbConn *sql.DB, signer *CASigner) error {
 
 // ForceCreateCA generates a new CA keypair, saves it locally, uploads it to the
 // registry, caches it in the DB, and marks it as the active CA.
-func ForceCreateCA(cfg *config.Config, dbConn *sql.DB, signer *CASigner) error {
+func ForceCreateCA(cfg *config.Config, dbConn *sql.DB, signer *CASigner, name string) error {
 	caDir := filepath.Join(cfg.RootDir, "data", "ca")
 	
 	passphrase := []byte(cfg.CA.Passphrase)
@@ -137,10 +137,14 @@ func ForceCreateCA(cfg *config.Config, dbConn *sql.DB, signer *CASigner) error {
 	}
 	fingerprint := ssh.FingerprintSHA256(pubKey)
 
+	if name == "" {
+		name = "System CA"
+	}
+
 	now := time.Now().UTC()
 	meta := registry.CAMetadata{
 		UUID:                caUUID,
-		Name:                "Initial System CA",
+		Name:                name,
 		Algorithm:           cfg.CA.DefaultKeyType,
 		Fingerprint:         fingerprint,
 		EncryptedPrivateKey: string(privPEM),

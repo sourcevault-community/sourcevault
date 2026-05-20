@@ -23,95 +23,41 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.                                                                //
 // ===================================================================================================================================== //
 
-// Package crypto provides cryptographic primitives for the SourceVault CA system.
-// This file defines the CertConfig type and signing configuration helpers.
 package crypto
 
 import (
-	"fmt"
-	"regexp"
-	"strconv"
-	"strings"
+	"testing"
 	"time"
 )
 
-// CertConfig defines the parameters for an SSH certificate signing request.
-// It is used by CASigner.Sign() and passed from the SSH server when issuing
-// certificates on behalf of authenticated users.
-type CertConfig struct {
-	// CertType specifies the certificate type: ssh.UserCert or ssh.HostCert.
-	CertType uint32
-
-	// KeyID is a human-readable identifier embedded in the certificate
-	// (e.g. "alice@example.com" or "node-1.sourcevault.io").
-	KeyID string
-
-	// Principals is the list of valid SSH principals (usernames or hostnames)
-	// that this certificate grants access to.
-	Principals []string
-
-	// ValidFor is the certificate lifetime from the moment of signing.
-	// The SSH server enforces expiry; clients with expired certs are rejected.
-	ValidFor time.Duration
-}
-
-// ParseHumanDuration parses a duration string that supports extended units
-// beyond Go's standard time.ParseDuration.
-//
-// Supported units:
-//   s: seconds
-//   m: minutes
-//   h: hours
-//   d: days (24h)
-//   w: weeks (7d)
-//   M: months (30d)
-//   y: years (365d)
-//
-// Example: "1y", "2M", "4w", "30d", "12h"
-func ParseHumanDuration(s string) (time.Duration, error) {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return 0, fmt.Errorf("duration string is empty")
+func TestParseHumanDuration(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected time.Duration
+		wantErr  bool
+	}{
+		{"1s", 1 * time.Second, false},
+		{"5m", 5 * time.Minute, false},
+		{"2h", 2 * time.Hour, false},
+		{"1d", 24 * time.Hour, false},
+		{"1w", 7 * 24 * time.Hour, false},
+		{"1M", 30 * 24 * time.Hour, false},
+		{"1y", 365 * 24 * time.Hour, false},
+		{" 12h ", 12 * time.Hour, false},
+		{"", 0, true},
+		{"invalid", 0, true},
+		{"1x", 0, true},
 	}
 
-	// First, try standard Go duration parsing (handles h, m, s)
-	if d, err := time.ParseDuration(s); err == nil {
-		return d, nil
+	for _, tc := range tests {
+		t.Run(tc.input, func(t *testing.T) {
+			got, err := ParseHumanDuration(tc.input)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("ParseHumanDuration(%q) error = %v, wantErr %v", tc.input, err, tc.wantErr)
+			}
+			if got != tc.expected {
+				t.Errorf("ParseHumanDuration(%q) = %v, want %v", tc.input, got, tc.expected)
+			}
+		})
 	}
-
-	// Regex to extract numeric value and unit
-	re := regexp.MustCompile(`^(\d+)([smhdwMy])$`)
-	matches := re.FindStringSubmatch(s)
-	if len(matches) != 3 {
-		return 0, fmt.Errorf("invalid duration format %q: expected value and unit (e.g. 1y, 2M, 30d)", s)
-	}
-
-	val, err := strconv.ParseInt(matches[1], 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("invalid numeric value in duration: %w", err)
-	}
-
-	unit := matches[2]
-	var multiplier time.Duration
-
-	switch unit {
-	case "s":
-		multiplier = time.Second
-	case "m":
-		multiplier = time.Minute
-	case "h":
-		multiplier = time.Hour
-	case "d":
-		multiplier = 24 * time.Hour
-	case "w":
-		multiplier = 7 * 24 * time.Hour
-	case "M":
-		multiplier = 30 * 24 * time.Hour
-	case "y":
-		multiplier = 365 * 24 * time.Hour
-	default:
-		return 0, fmt.Errorf("unsupported duration unit %q", unit)
-	}
-
-	return time.Duration(val) * multiplier, nil
 }
