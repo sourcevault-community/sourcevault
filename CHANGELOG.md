@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **SSH Certificate Signing** (`cmd/sourcevault ca sign`): Implemented the ability to sign SSH public keys with the unsealed local CA. Supports user and host certificates, customizable principals, and validity periods. Automatically outputs the signed certificate to `[key]-cert.pub`.
+- **Crypto & Registry Unit Tests**: Developed a comprehensive test suite for `internal/crypto` and `internal/registry`.
+    - `internal/crypto`: Verified Ed25519/RSA CA key generation, in-memory unsealing/sealing, certificate signing logic, and OpenSSH-compatible KRL production.
+    - `internal/registry`: Implemented integration tests with a temporary Git repository to verify CA metadata persistence and revocation workflows.
 - **Git-First System Registry** (`internal/registry`): Implemented `EnsureRegistry()` to bootstrap a bare Git repository and checked-out worktree at `RootDir/registry/` on startup. Handles three scenarios: fresh init, missing worktree clone, and force-sync of an existing worktree via `git reset --hard` to guarantee no merge conflicts.
 - **Agnostic Database Core**: Implemented a highly concurrent SQLite connection pool (via `mattn/go-sqlite3`) abstracted via `database/sql` for future Postgres/MySQL support.
 - **Dialect-Aware Migrations**: Built a lightweight startup schema migration engine.

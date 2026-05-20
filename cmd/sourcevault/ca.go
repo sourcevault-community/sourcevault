@@ -222,6 +222,72 @@ var caRotateCmd = &cobra.Command{
 	},
 }
 
+// caSignCmd handles "sourcevault ca sign".
+var caSignCmd = &cobra.Command{
+	Use:   "sign [public-key-file]",
+	Short: "Sign a public key with the unsealed CA",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if !appSigner.IsUnsealed() {
+			return fmt.Errorf("CA is sealed: run 'sourcevault ca unseal' first")
+		}
+
+		pubKeyPath := args[0]
+		pubKeyBytes, err := os.ReadFile(pubKeyPath)
+		if err != nil {
+			return fmt.Errorf("reading public key: %w", err)
+		}
+
+		certTypeStr, _ := cmd.Flags().GetString("type")
+		keyID, _ := cmd.Flags().GetString("id")
+		principals, _ := cmd.Flags().GetStringSlice("principals")
+		validFor, _ := cmd.Flags().GetDuration("valid-for")
+
+		var certType uint32
+		switch certTypeStr {
+		case "user":
+			certType = ssh.UserCert
+		case "host":
+			certType = ssh.HostCert
+		default:
+			return fmt.Errorf("invalid certificate type %q: must be \"user\" or \"host\"", certTypeStr)
+		}
+
+		if validFor == 0 {
+			validFor = time.Duration(appCfg.CA.DefaultValidDays) * 24 * time.Hour
+		}
+
+		slog.Info("Signing certificate", "key", pubKeyPath, "id", keyID, "type", certTypeStr)
+
+		certBytes, serial, err := appSigner.Sign(pubKeyBytes, crypto.CertConfig{
+			CertType:   certType,
+			KeyID:      keyID,
+			Principals: principals,
+			ValidFor:   validFor,
+		})
+		if err != nil {
+			return fmt.Errorf("signing failed: %w", err)
+		}
+
+		// Write the certificate to [key]-cert.pub
+		certPath := pubKeyPath
+		if filepath.Ext(pubKeyPath) == ".pub" {
+			certPath = pubKeyPath[:len(pubKeyPath)-4] + "-cert.pub"
+		} else {
+			certPath = pubKeyPath + "-cert.pub"
+		}
+
+		if err := os.WriteFile(certPath, certBytes, 0o644); err != nil {
+			return fmt.Errorf("writing certificate: %w", err)
+		}
+
+		fmt.Printf("Certificate signed successfully\n")
+		fmt.Printf("  Serial:      %d\n", serial)
+		fmt.Printf("  Certificate: %s\n", certPath)
+		return nil
+	},
+}
+
 func init() {
 	// ca create flags
 	caCreateCmd.Flags().String("key-type", "", "Key algorithm: ed25519 or rsa (default from config)")
@@ -242,8 +308,14 @@ func init() {
 	caRotateCmd.Flags().Duration("valid-for", 0, "Validity period for the new CA")
 	caRotateCmd.Flags().String("name", "", "Name for the new CA")
 
+	// ca sign flags
+	caSignCmd.Flags().String("type", "user", "Certificate type: user or host")
+	caSignCmd.Flags().String("id", "", "Key ID (comment) to embed in the certificate")
+	caSignCmd.Flags().StringSlice("principals", nil, "List of valid principals (comma separated)")
+	caSignCmd.Flags().Duration("valid-for", 0, "Certificate validity period e.g. 24h (default from config)")
+
 	// Register all subcommands under caCmd.
-	caCmd.AddCommand(caCreateCmd, caUnsealCmd, caSealCmd, caStatusCmd, caRevokeCmd, caRotateCmd)
+	caCmd.AddCommand(caCreateCmd, caUnsealCmd, caSealCmd, caStatusCmd, caRevokeCmd, caRotateCmd, caSignCmd)
 }
 
 // promptPassphrase reads a passphrase from the terminal without echoing it.
