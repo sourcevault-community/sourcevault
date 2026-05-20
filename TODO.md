@@ -206,6 +206,40 @@ Operators on FIPS-compliant infrastructure must be able to restrict the allowed 
 
 ---
 
+### [SV-011] Implement Restricted SSH Shell & Git Session Handler
+**Status**: `[ ]` Pending
+**Depends on**: SV-002 (SSH server), SV-004 (CA/signing), SV-005 (user model), SV-006 (repo model)
+**Context / Files**:
+- `internal/ssh/shell.go` (new)
+- `internal/ssh/git.go` (new)
+- `internal/ssh/sanitizer.go` (new)
+**Background**:
+When a user connects over SSH they land in a restricted SourceVault shell — not a system shell. The shell handles two modes:
+- **Interactive mode**: a custom prompt for administrative operations (key management, CA status, repo listing, etc.).
+- **Git mode**: non-interactive execution of git transfer commands triggered by the client (`git clone`, `git push`, `git fetch`).
+
+The shell must make it extremely difficult to escape to system commands.
+
+**Acceptance Criteria**:
+1. Implement a command allowlist sanitizer in `internal/ssh/sanitizer.go`:
+   - Only `git-upload-pack`, `git-receive-pack`, and `git-upload-archive` may be executed.
+   - All other exec requests are rejected and logged at `Warn`.
+   - Input is validated against a strict regex — no shell metacharacters (`|`, `;`, `&`, `$`, backticks, etc.) are permitted.
+   - Repository paths are validated to be within `RootDir/volumes/` and must not contain `..` traversal sequences.
+2. Implement `internal/ssh/git.go` for non-interactive git session execution:
+   - Parse the SSH exec request (e.g. `git-upload-pack '/org/repo.git'`).
+   - Validate command and path through the sanitizer.
+   - Execute the allowed git binary with the sanitized absolute path, piping stdin/stdout/stderr to the SSH channel.
+3. Implement `internal/ssh/shell.go` for the interactive prompt:
+   - Displayed when a user connects without an exec request (no command).
+   - Supports a defined set of built-in commands: `help`, `whoami`, `repos`, `keys`, `exit`.
+   - All other input is rejected with `"command not permitted"`.
+   - Prompt displays the authenticated username.
+4. The SSH server (SV-002) routes sessions: exec requests → git handler, no-command sessions → interactive shell.
+5. Log every session open/close, every allowed command, and every rejected command at `Info`/`Warn`.
+
+---
+
 ## Milestone: v1.0.0 — Production Ready
 
 > First stable public release. Scope TBD — add tasks here as the earlier milestones complete.
