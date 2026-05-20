@@ -36,6 +36,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/term"
 
 	"sourcevault/internal/crypto"
 	"sourcevault/internal/db"
@@ -54,6 +55,18 @@ var startCmd = &cobra.Command{
 		fmt.Fprint(cmd.OutOrStdout(), "\n\n")
 
 		cfg := appCfg
+
+		// If no passphrase is provided in the config, and we are in a terminal,
+		// prompt the user. This is required for either unsealing or force-creating a CA.
+		if cfg.CA.Passphrase == "" && term.IsTerminal(int(os.Stdin.Fd())) {
+			pass, err := promptPassphrase("Enter CA passphrase (required for unsealing/creation): ")
+			if err != nil {
+				return fmt.Errorf("reading passphrase: %w", err)
+			}
+			if len(pass) > 0 {
+				cfg.CA.Passphrase = string(pass)
+			}
+		}
 
 		// Step 3: Log application metadata.
 		slog.Info("Application is starting up", "application_name", version.Current.AppName, "application_version", version.Current.AppVersion)

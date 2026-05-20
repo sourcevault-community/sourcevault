@@ -97,7 +97,7 @@ func ForceCreateCA(cfg *config.Config, dbConn *sql.DB, signer *CASigner) error {
 	
 	passphrase := []byte(cfg.CA.Passphrase)
 	if len(passphrase) == 0 {
-		return fmt.Errorf("cannot force-create CA: SOURCEVAULT_CA_PASSPHRASE is not set")
+		return fmt.Errorf("cannot force-create CA: no passphrase provided (use SOURCEVAULT_CA_PASSPHRASE or provide one via interactive prompt)")
 	}
 
 	privPEM, pubAuth, err := GenerateCAKey(cfg.CA.DefaultKeyType, cfg.CA.DefaultRSABits, passphrase)
