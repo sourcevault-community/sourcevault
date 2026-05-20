@@ -42,43 +42,55 @@ import (
 )
 
 // EnsureCA guarantees that the local system is in sync with the authoritative
-// CA defined in the registry.
-// 1. If an active CA exists in the registry, it ensures local files match.
-// 2. It DOES NOT force-create a CA if missing (manual initialization required).
-// 3. It DOES NOT automatically unseal the signer.
+// CA defined in the registry and that all CA history is cached in the database.
 func EnsureCA(cfg *config.Config, dbConn *sql.DB, signer *CASigner) error {
 	caDir := filepath.Join(cfg.RootDir, "data", "ca")
 	if err := os.MkdirAll(caDir, 0700); err != nil {
 		return fmt.Errorf("creating CA directory: %w", err)
 	}
 
-	// Step 1: Check registry for the current authoritative CA.
-	activeMeta, err := registry.GetActiveCA(cfg)
+	// Step 1: Get the current authoritative CA UUID.
+	activeUUID, err := registry.GetActiveCAUUID(cfg)
 	if err != nil {
-		return fmt.Errorf("checking registry for active CA: %w", err)
+		return fmt.Errorf("getting active CA UUID: %w", err)
 	}
 
-	if activeMeta != nil {
-		slog.Debug("Found active CA in registry", "uuid", activeMeta.UUID)
-		localPrivPath := filepath.Join(caDir, activeMeta.UUID)
-		localPubPath := localPrivPath + ".pub"
+	// Step 2: Retrieve all CA metadata from the registry for a full sync.
+	allMeta, err := registry.ListCAMetadata(cfg)
+	if err != nil {
+		return fmt.Errorf("listing CA metadata: %w", err)
+	}
 
-		// Ensure DB cache is up to date with registry
-		if err := db.UpsertCA(dbConn, *activeMeta, true); err != nil {
-			slog.Warn("Failed to sync CA metadata to database cache", "uuid", activeMeta.UUID, "error", err)
+	if len(allMeta) == 0 {
+		slog.Info("No CA metadata found in registry. System is in uninitialized state.")
+		return nil
+	}
+
+	slog.Debug("Starting CA metadata synchronization to database", "count", len(allMeta))
+
+	for _, meta := range allMeta {
+		isActive := (meta.UUID == activeUUID)
+
+		// Sync to DB cache.
+		if err := db.UpsertCA(dbConn, meta, isActive); err != nil {
+			slog.Warn("Failed to sync CA metadata to database cache", "uuid", meta.UUID, "error", err)
 		}
 
-		// If local files are missing, restore them from registry so the node is "ready" to be unsealed.
-		if _, err := os.Stat(localPrivPath); os.IsNotExist(err) {
-			slog.Info("Local CA missing, restoring from registry", "uuid", activeMeta.UUID)
-			if err := restoreCA(activeMeta, localPrivPath, localPubPath); err != nil {
-				return fmt.Errorf("restoring CA from registry: %w", err)
+		// If this is the active CA and local files are missing, restore them.
+		if isActive {
+			localPrivPath := filepath.Join(caDir, meta.UUID)
+			localPubPath := localPrivPath + ".pub"
+
+			if _, err := os.Stat(localPrivPath); os.IsNotExist(err) {
+				slog.Info("Local active CA missing, restoring from registry", "uuid", meta.UUID)
+				if err := restoreCA(&meta, localPrivPath, localPubPath); err != nil {
+					return fmt.Errorf("restoring CA from registry: %w", err)
+				}
 			}
 		}
-	} else {
-		slog.Info("No active CA found in registry. System is in uninitialized state.")
 	}
 
+	slog.Info("CA metadata synchronization complete", "active_uuid", activeUUID)
 	return nil
 }
 

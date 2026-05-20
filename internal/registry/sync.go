@@ -61,39 +61,87 @@ type ActiveCAMetadata struct {
 	UpdatedAt time.Time `yaml:"updated_at"`
 }
 
-// GetActiveCA retrieves the metadata of the currently active CA from the registry.
-// Returns nil, nil if no CA is currently active.
-func GetActiveCA(cfg *config.Config) (*CAMetadata, error) {
+// GetActiveCAUUID returns the UUID of the currently authoritative CA.
+// Returns empty string if no CA is active.
+func GetActiveCAUUID(cfg *config.Config) (string, error) {
 	worktree := filepath.Join(cfg.RootDir, "data", "registry", "worktree")
 	activePath := filepath.Join(worktree, "CertificateAuthority", "ActiveCA.yaml")
 
 	if _, err := os.Stat(activePath); os.IsNotExist(err) {
-		return nil, nil
+		return "", nil
 	}
 
 	data, err := os.ReadFile(activePath)
 	if err != nil {
-		return nil, fmt.Errorf("reading ActiveCA metadata: %w", err)
+		return "", fmt.Errorf("reading ActiveCA metadata: %w", err)
 	}
 
 	var active ActiveCAMetadata
 	if err := yaml.Unmarshal(data, &active); err != nil {
-		return nil, fmt.Errorf("parsing ActiveCA metadata: %w", err)
+		return "", fmt.Errorf("parsing ActiveCA metadata: %w", err)
 	}
 
-	// Now load the actual CA metadata
-	caPath := filepath.Join(worktree, "CertificateAuthority", active.UUID+".yaml")
+	return active.UUID, nil
+}
+
+// GetActiveCA retrieves the metadata of the currently active CA from the registry.
+// Returns nil, nil if no CA is currently active.
+func GetActiveCA(cfg *config.Config) (*CAMetadata, error) {
+	uuid, err := GetActiveCAUUID(cfg)
+	if err != nil || uuid == "" {
+		return nil, err
+	}
+
+	worktree := filepath.Join(cfg.RootDir, "data", "registry", "worktree")
+	caPath := filepath.Join(worktree, "CertificateAuthority", uuid+".yaml")
 	caData, err := os.ReadFile(caPath)
 	if err != nil {
-		return nil, fmt.Errorf("reading CA metadata for %s: %w", active.UUID, err)
+		return nil, fmt.Errorf("reading CA metadata for %s: %w", uuid, err)
 	}
 
 	var meta CAMetadata
 	if err := yaml.Unmarshal(caData, &meta); err != nil {
-		return nil, fmt.Errorf("parsing CA metadata for %s: %w", active.UUID, err)
+		return nil, fmt.Errorf("parsing CA metadata for %s: %w", uuid, err)
 	}
 
 	return &meta, nil
+}
+
+// ListCAMetadata returns all CA records found in the registry.
+func ListCAMetadata(cfg *config.Config) ([]CAMetadata, error) {
+	worktree := filepath.Join(cfg.RootDir, "data", "registry", "worktree")
+	caDir := filepath.Join(worktree, "CertificateAuthority")
+
+	entries, err := os.ReadDir(caDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("reading CA registry directory: %w", err)
+	}
+
+	var results []CAMetadata
+	for _, entry := range entries {
+		// Only process UUID.yaml files, skip ActiveCA.yaml
+		if entry.IsDir() || entry.Name() == "ActiveCA.yaml" || filepath.Ext(entry.Name()) != ".yaml" {
+			continue
+		}
+
+		data, err := os.ReadFile(filepath.Join(caDir, entry.Name()))
+		if err != nil {
+			slog.Warn("Failed to read CA metadata file", "file", entry.Name(), "error", err)
+			continue
+		}
+
+		var meta CAMetadata
+		if err := yaml.Unmarshal(data, &meta); err != nil {
+			slog.Warn("Failed to parse CA metadata file", "file", entry.Name(), "error", err)
+			continue
+		}
+		results = append(results, meta)
+	}
+
+	return results, nil
 }
 
 // SetActiveCA marks a specific CA UUID as the active one in the registry.
